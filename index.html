@@ -141,6 +141,31 @@
       </section>
     </div>
 
+    <!-- Tab: Ränge -->
+    <div class="pane" id="paneRang" hidden>
+      <section class="card" id="myRankCard">
+        <h2 class="cardTitle">Dein Rang</h2>
+        <div id="myRanks"></div>
+      </section>
+
+      <section class="card">
+        <h2 class="cardTitle">Rangliste</h2>
+        <div class="seg" id="metricSeg" role="tablist">
+          <button type="button" data-metric="situps" class="active">Sit-ups</button>
+          <button type="button" data-metric="pushups">Liegestütze</button>
+          <button type="button" data-metric="done">Geschafft</button>
+          <button type="button" data-metric="streak">Serie</button>
+        </div>
+        <div class="board" id="board"></div>
+        <p class="hint" id="boardHint"></p>
+      </section>
+
+      <details class="card">
+        <summary>Alle Ränge ansehen</summary>
+        <div class="ladder" id="ladder"></div>
+      </details>
+    </div>
+
     <!-- Tab: Bilanz -->
     <div class="pane" id="paneBilanz" hidden>
       <section class="card">
@@ -207,6 +232,9 @@
       <div class="tabbarInner">
         <button type="button" data-tab="today" class="active">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.8 2.8L16.5 9.5"/></svg>Heute
+        </button>
+        <button type="button" data-tab="rang">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5v2a3 3 0 0 0 3 3M16 6h3v2a3 3 0 0 1-3 3M12 13v4M9 20h6"/></svg>Ränge
         </button>
         <button type="button" data-tab="bilanz">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Bilanz

@@ -483,7 +483,122 @@ function updateBars() {
   $("pushupsCount").textContent = p + " / " + G.group.pushups;
 }
 
-const PANES = { today: "paneToday", bilanz: "paneBilanz", verlauf: "paneVerlauf", gruppe: "paneGruppe" };
+const PANES = { today: "paneToday", rang: "paneRang", bilanz: "paneBilanz", verlauf: "paneVerlauf", gruppe: "paneGruppe" };
+
+/* ---------- Ränge ---------- */
+
+// Ränge richten sich nach der Zahl voller Tage (Tagesziel der Gruppe × Tage), für Sit-ups und Liegestütze getrennt.
+const RANKS = [
+  { name: "Rookie", days: 0 },
+  { name: "Kämpfer", days: 5 },
+  { name: "Athlet", days: 15 },
+  { name: "Krieger", days: 30 },
+  { name: "Veteran", days: 50 },
+  { name: "Champion", days: 100 },
+  { name: "Master", days: 200 },
+  { name: "Grandmaster", days: 300 },
+  { name: "Legende", days: 365 },
+];
+const HIGH_LEVEL = 7;
+const nf = (n) => n.toLocaleString("de-DE");
+
+function rankFor(total, daily) {
+  let i = 0;
+  RANKS.forEach((r, k) => { if (total >= r.days * daily) i = k; });
+  const next = RANKS[i + 1];
+  return {
+    level: i + 1, name: RANKS[i].name, base: RANKS[i].days * daily,
+    next: next ? { name: next.name, need: next.days * daily } : null,
+  };
+}
+
+function rankChip(r) {
+  return el("span", "rk" + (r.level >= HIGH_LEVEL ? " hi" : ""), "Lv " + r.level + " · " + r.name);
+}
+
+function currentStreak(G, uid, today) {
+  const grp = G.group;
+  let d = today, streak = 0;
+  if (!entryFor(G, uid, d)) d = addDays(d, -1);
+  for (let i = 0; i < 800; i++) {
+    const e = entryFor(G, uid, d);
+    if (!e) break;
+    const done = e.situps >= grp.situps && e.pushups >= grp.pushups;
+    if (!e.skipped && !done) break;
+    if (!e.skipped) streak++;
+    d = addDays(d, -1);
+  }
+  return streak;
+}
+
+const METRICS = {
+  situps: { key: "sit", unit: "", hint: "Alle Sit-ups, die jemals in dieser Gruppe eingetragen wurden." },
+  pushups: { key: "push", unit: "", hint: "Alle Liegestütze, die jemals in dieser Gruppe eingetragen wurden." },
+  done: { key: "done", unit: " Tage", hint: "Tage, an denen das Tagesziel geschafft wurde." },
+  streak: { key: "streak", unit: " Tage", hint: "Geschaffte Tage in Folge bis heute. Skip-Tage unterbrechen die Serie nicht, ein verpasster Tag setzt sie auf 0." },
+};
+
+function renderBoard() {
+  const G = S.g;
+  if (!G || !G.stats) return;
+  const grp = G.group, me = S.user.uid;
+  const metric = G.metric || "situps";
+  const cfg = METRICS[metric];
+  const val = (m) => G.stats[m.uid][cfg.key];
+  const sorted = [...G.membersView].sort((a, b) => val(b) - val(a) || a.name.localeCompare(b.name, "de"));
+  document.querySelectorAll("#metricSeg button").forEach((b) => b.classList.toggle("active", b.dataset.metric === metric));
+  $("board").replaceChildren(...sorted.map((m) => {
+    const v = val(m);
+    const pos = 1 + sorted.filter((o) => val(o) > v).length;
+    const row = el("div", "brow" + (m.uid === me ? " me" : ""));
+    const main = el("div", "bmain");
+    main.append(el("div", "bname", m.name + (m.uid === me ? " (du)" : "")));
+    if (metric === "situps") main.append(rankChip(rankFor(v, grp.situps)));
+    if (metric === "pushups") main.append(rankChip(rankFor(v, grp.pushups)));
+    const unit = cfg.unit ? (v === 1 ? " Tag" : " Tage") : "";
+    row.append(el("div", "pos" + (pos <= 3 && v > 0 ? " p" + pos : ""), String(pos)), main, el("div", "bval num", nf(v) + unit));
+    return row;
+  }));
+  $("boardHint").textContent = cfg.hint;
+}
+
+function renderRanks(isMember) {
+  const G = S.g, grp = G.group, me = S.user.uid;
+  $("myRankCard").hidden = !isMember;
+  if (isMember) {
+    const mine = G.stats[me] || { sit: 0, push: 0 };
+    const blocks = [["Sit-ups", mine.sit, grp.situps], ["Liegestütze", mine.push, grp.pushups]].map(([label, total, daily]) => {
+      const r = rankFor(total, daily);
+      const box = el("div", "myRank");
+      const top = el("div", "myRankTop");
+      top.append(el("span", "exName", label), rankChip(r));
+      const mid = el("div", "myRankMid");
+      mid.append(
+        el("div", "myRankTotal num", nf(total)),
+        el("div", "myRankNext", r.next ? "noch " + nf(r.next.need - total) + " bis " + r.next.name : "Höchster Rang erreicht")
+      );
+      const bar = el("div", "bar");
+      const fill = el("div", "bar-fill rankfill" + (r.level >= HIGH_LEVEL ? " hi" : ""));
+      fill.style.width = (r.next ? Math.min(100, ((total - r.base) / (r.next.need - r.base)) * 100) : 100) + "%";
+      bar.append(fill);
+      box.append(top, mid, bar);
+      return box;
+    });
+    $("myRanks").replaceChildren(...blocks);
+  }
+  $("ladder").replaceChildren(...RANKS.map((r, i) => {
+    const row = el("div", "lrow");
+    row.append(
+      rankChip({ level: i + 1, name: r.name }),
+      el("span", "", ""),
+      el("div", "need", r.days === 0
+        ? "Startrang"
+        : nf(r.days * grp.situps) + " Sit-ups · " + nf(r.days * grp.pushups) + " Liegestütze (" + r.days + " volle Tage)")
+    );
+    return row;
+  }));
+  renderBoard();
+}
 function setTab(tab) {
   if (S.g) S.g.tab = tab;
   Object.keys(PANES).forEach((t) => { $(PANES[t]).hidden = t !== tab; });
@@ -584,6 +699,16 @@ function renderGroup() {
     tbody.append(tr);
   });
   $("bilanzTable").replaceChildren(thead, tbody);
+
+  const stats = {};
+  members.forEach((m) => { stats[m.uid] = { sit: sit[m.uid], push: push[m.uid], done: 0, streak: currentStreak(G, m.uid, today) }; });
+  G.entries.forEach((e) => {
+    const st = stats[e.uid];
+    if (st && !e.skipped && e.situps >= grp.situps && e.pushups >= grp.pushups) st.done++;
+  });
+  G.stats = stats;
+  G.membersView = members;
+  renderRanks(member);
 
   const MARK = { success: "✓", danger: "✕", skip: "S", pending: "·" };
   const grid = $("historyGrid");
@@ -769,6 +894,11 @@ function wire() {
   $("pushupsInput").addEventListener("input", updateBars);
   $("saveBtn").addEventListener("click", saveEntry);
   document.querySelectorAll(".tabbar button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+  document.querySelectorAll("#metricSeg button").forEach((b) => b.addEventListener("click", () => {
+    if (!S.g) return;
+    S.g.metric = b.dataset.metric;
+    renderBoard();
+  }));
 
   $("copyCode").addEventListener("click", async () => {
     if (!S.g) return;

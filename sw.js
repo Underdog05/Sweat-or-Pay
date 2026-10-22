@@ -1,4 +1,4 @@
-const CACHE = "sweat-or-pay-v3";
+const CACHE = "sweat-or-pay-v4";
 const SHELL = ["./", "./index.html", "./style.css", "./app.js", "./config.js", "./manifest.webmanifest", "./icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
