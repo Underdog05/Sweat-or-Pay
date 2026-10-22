@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sweat or Pay</title>
-<meta name="theme-color" content="#0b1220">
+<meta name="theme-color" content="#0a1120">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Sweat or Pay">
@@ -17,11 +17,12 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<canvas id="fx" aria-hidden="true"></canvas>
 <div id="app">
 
   <header class="topbar" id="topbar" hidden>
     <a class="brand" href="#">Sweat <em>or</em> Pay</a>
-    <div class="whoBadge" id="whoBadge">—</div>
+    <button class="whoBadge" id="whoBadge" type="button" aria-label="Profil öffnen">—</button>
   </header>
   <div class="banner" id="banner" hidden></div>
 
@@ -141,6 +142,15 @@
       </section>
     </div>
 
+    <!-- Tab: Feed -->
+    <div class="pane" id="paneFeed" hidden>
+      <section class="card">
+        <h2 class="cardTitle">Aktivitäten der letzten 14 Tage</h2>
+        <div class="feed" id="feedList"></div>
+        <p class="empty" id="feedEmpty" hidden>Noch keine Einträge. Sobald jemand etwas einträgt, kannst du hier reagieren.</p>
+      </section>
+    </div>
+
     <!-- Tab: Ränge -->
     <div class="pane" id="paneRang" hidden>
       <section class="card" id="myRankCard">
@@ -166,66 +176,84 @@
       </details>
     </div>
 
-    <!-- Tab: Bilanz -->
-    <div class="pane" id="paneBilanz" hidden>
-      <section class="card">
-        <h2 class="cardTitle">Schulden und Gesamtzahlen</h2>
-        <div class="scrollX"><table class="bilanz" id="bilanzTable"></table></div>
-      </section>
-    </div>
-
-    <!-- Tab: Verlauf -->
-    <div class="pane" id="paneVerlauf" hidden>
-      <section class="card">
-        <h2 class="cardTitle">Letzte 14 Tage</h2>
-        <div class="legend">
-          <span><i class="mark success">✓</i>Geschafft</span>
-          <span><i class="mark danger">✕</i>Verloren</span>
-          <span><i class="mark skip">S</i>Skip-Tag</span>
-          <span><i class="mark pending">·</i>Offen</span>
-        </div>
-        <div class="scrollX"><div class="historyGrid" id="historyGrid"></div></div>
+    <!-- Tab: Chat -->
+    <div class="pane" id="paneChat" hidden>
+      <section class="card chatCard">
+        <div class="chatList" id="chatList" aria-live="polite"></div>
+        <p class="empty" id="chatEmpty" hidden>Noch keine Nachrichten. Schreib die erste.</p>
+        <form id="chatForm" class="chatForm" novalidate>
+          <input id="chatInput" type="text" maxlength="500" placeholder="Nachricht schreiben …" autocomplete="off" aria-label="Nachricht">
+          <button class="primary" type="submit" id="chatSend">Senden</button>
+        </form>
       </section>
     </div>
 
     <!-- Tab: Gruppe -->
     <div class="pane" id="paneGruppe" hidden>
-      <section class="card">
-        <h2 class="cardTitle">Einladungscode</h2>
-        <div class="codeBox">
-          <div class="codeValue num" id="codeValue">——</div>
-          <div class="codeActions">
-            <button class="secondary small" id="copyCode" type="button">Kopieren</button>
-            <button class="secondary small" id="shareCode" type="button" hidden>Teilen</button>
+      <div class="seg" id="groupSeg" role="tablist">
+        <button type="button" data-sec="bilanz" class="active">Bilanz</button>
+        <button type="button" data-sec="verlauf">Verlauf</button>
+        <button type="button" data-sec="info">Gruppe</button>
+      </div>
+
+      <div id="secBilanz">
+        <section class="card">
+          <h2 class="cardTitle">Schulden und Gesamtzahlen</h2>
+          <div class="scrollX"><table class="bilanz" id="bilanzTable"></table></div>
+        </section>
+      </div>
+
+      <div id="secVerlauf" hidden>
+        <section class="card">
+          <h2 class="cardTitle">Letzte 14 Tage</h2>
+          <div class="legend">
+            <span><i class="mark success">✓</i>Geschafft</span>
+            <span><i class="mark danger">✕</i>Verloren</span>
+            <span><i class="mark skip">S</i>Skip-Tag</span>
+            <span><i class="mark pending">·</i>Offen</span>
           </div>
-        </div>
-        <div class="rules" id="rules"></div>
-      </section>
+          <div class="scrollX"><div class="historyGrid" id="historyGrid"></div></div>
+        </section>
+      </div>
 
-      <section class="card">
-        <h2 class="cardTitle">Mitglieder</h2>
-        <div class="memberList" id="memberList"></div>
-      </section>
-
-      <details class="card adminTools" id="adminTools" hidden>
-        <summary>Gruppe verwalten</summary>
-        <form id="editForm" novalidate>
-          <label class="field"><span>Gruppenname</span><input id="editName" type="text" maxlength="40"></label>
-          <div class="threeCols">
-            <label class="field"><span>Sit-ups</span><input id="editSitups" type="number" inputmode="numeric" min="1" max="2000"></label>
-            <label class="field"><span>Liegestütze</span><input id="editPushups" type="number" inputmode="numeric" min="1" max="2000"></label>
-            <label class="field"><span>Strafe (€)</span><input id="editPenalty" type="number" inputmode="numeric" min="0" max="1000"></label>
+      <div id="secInfo" hidden>
+        <section class="card">
+          <h2 class="cardTitle">Einladungscode</h2>
+          <div class="codeBox">
+            <div class="codeValue num" id="codeValue">——</div>
+            <div class="codeActions">
+              <button class="secondary small" id="copyCode" type="button">Kopieren</button>
+              <button class="secondary small" id="shareCode" type="button" hidden>Teilen</button>
+            </div>
           </div>
-          <div class="feedback" id="editMsg" hidden></div>
-          <button class="primary" type="submit">Änderungen speichern</button>
-        </form>
-        <div class="adminActions">
-          <button class="secondary" id="newCodeBtn" type="button">Neuen Code erzeugen</button>
-          <button class="danger" id="deleteGroupBtn" type="button">Gruppe löschen</button>
-        </div>
-      </details>
+          <div class="rules" id="rules"></div>
+        </section>
 
-      <div class="center"><button class="link" id="leaveBtn" type="button" hidden>Gruppe verlassen</button></div>
+        <section class="card">
+          <h2 class="cardTitle">Mitglieder</h2>
+          <div class="memberList" id="memberList"></div>
+        </section>
+
+        <details class="card adminTools" id="adminTools" hidden>
+          <summary>Gruppe verwalten</summary>
+          <form id="editForm" novalidate>
+            <label class="field"><span>Gruppenname</span><input id="editName" type="text" maxlength="40"></label>
+            <div class="threeCols">
+              <label class="field"><span>Sit-ups</span><input id="editSitups" type="number" inputmode="numeric" min="1" max="2000"></label>
+              <label class="field"><span>Liegestütze</span><input id="editPushups" type="number" inputmode="numeric" min="1" max="2000"></label>
+              <label class="field"><span>Strafe (€)</span><input id="editPenalty" type="number" inputmode="numeric" min="0" max="1000"></label>
+            </div>
+            <div class="feedback" id="editMsg" hidden></div>
+            <button class="primary" type="submit">Änderungen speichern</button>
+          </form>
+          <div class="adminActions">
+            <button class="secondary" id="newCodeBtn" type="button">Neuen Code erzeugen</button>
+            <button class="danger" id="deleteGroupBtn" type="button">Gruppe löschen</button>
+          </div>
+        </details>
+
+        <div class="center"><button class="link" id="leaveBtn" type="button" hidden>Gruppe verlassen</button></div>
+      </div>
     </div>
 
     <nav class="tabbar" aria-label="Bereiche">
@@ -233,14 +261,14 @@
         <button type="button" data-tab="today" class="active">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.8 2.8L16.5 9.5"/></svg>Heute
         </button>
+        <button type="button" data-tab="feed">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Feed
+        </button>
         <button type="button" data-tab="rang">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5v2a3 3 0 0 0 3 3M16 6h3v2a3 3 0 0 1-3 3M12 13v4M9 20h6"/></svg>Ränge
         </button>
-        <button type="button" data-tab="bilanz">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Bilanz
-        </button>
-        <button type="button" data-tab="verlauf">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Verlauf
+        <button type="button" data-tab="chat">
+          <span class="tabIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4A8 8 0 1 1 20 12z"/></svg><i class="tabBadge" id="chatBadge" hidden>0</i></span>Chat
         </button>
         <button type="button" data-tab="gruppe">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="10" r="2.5"/><path d="M16.5 14.2c2.3.1 3.7 1.6 4.1 4.3"/></svg>Gruppe
@@ -261,6 +289,37 @@
   </section>
 
 </div>
+
+<!-- ===== Profil ===== -->
+<div class="modal" id="profileModal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+    <h3 class="cardTitle" id="profileTitle">Dein Profil</h3>
+    <div class="profileRow">
+      <div id="profileAvatar"></div>
+      <div>
+        <div class="profileName" id="profileName"></div>
+        <div class="hint">Dein Bild sehen alle Mitglieder deiner Gruppen.</div>
+      </div>
+    </div>
+    <input type="file" id="avatarFile" accept="image/*" hidden>
+    <button class="primary" id="avatarPick" type="button">Foto auswählen</button>
+    <button class="secondary" id="avatarRemove" type="button">Bild entfernen</button>
+    <div class="feedback" id="profileMsg" hidden></div>
+    <div class="center"><button class="link" id="profileClose" type="button">Schließen</button></div>
+  </div>
+</div>
+
+<!-- ===== Rang-Feier ===== -->
+<div class="celebrate" id="celebrate" hidden>
+  <div class="celebrateCard" role="dialog" aria-modal="true" aria-labelledby="celName">
+    <div class="celebrateKicker" id="celKicker">Neuer Rang!</div>
+    <div class="celebrateBadge" id="celBadge"></div>
+    <div class="celebrateName" id="celName"></div>
+    <div class="celebrateSub" id="celSub"></div>
+    <button class="primary" id="celClose" type="button">Weiter so</button>
+  </div>
+</div>
+
 <script type="module" src="app.js"></script>
 </body>
 </html>

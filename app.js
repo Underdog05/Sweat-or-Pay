@@ -6,12 +6,13 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {
   initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator,
-  doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, writeBatch,
+  doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, writeBatch, query, where, orderBy, limit,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 const MAX_REPS = 2000;
 const DEFAULTS = CONFIG.defaults;
 const configured = !!(CONFIG.firebase && CONFIG.firebase.apiKey && !CONFIG.firebase.apiKey.startsWith("HIER"));
+const AVATAR_PREFIX = "data:image/jpeg;base64,";
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => {
@@ -25,6 +26,9 @@ const fmtYmd = (d) => d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad
 const todayStr = () => fmtYmd(new Date());
 const addDays = (s, delta) => { const d = new Date(s + "T00:00:00"); d.setDate(d.getDate() + delta); return fmtYmd(d); };
 const nowIso = () => new Date().toISOString();
+const nf = (n) => n.toLocaleString("de-DE");
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 function isoWeekKey(s) {
   const d = new Date(s + "T00:00:00");
@@ -40,6 +44,17 @@ function formatDate(s) {
   } catch (e) { return s; }
 }
 
+function dayLabel(s) {
+  const t = todayStr();
+  if (s === t) return "Heute";
+  if (s === addDays(t, -1)) return "Gestern";
+  return formatDate(s);
+}
+
+function timeOf(iso) {
+  try { return new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; }
+}
+
 function cleanReps(v) {
   const n = parseInt(v, 10);
   return Number.isFinite(n) ? Math.min(MAX_REPS, Math.max(0, n)) : 0;
@@ -51,9 +66,14 @@ function makeCode() {
   return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
 }
 
+function safeAvatar(v) {
+  if (typeof v !== "string" || v.length > 24000 || !v.startsWith(AVATAR_PREFIX)) return "";
+  return /^[A-Za-z0-9+/=]+$/.test(v.slice(AVATAR_PREFIX.length)) ? v : "";
+}
+
 /* ---------- state ---------- */
 
-const S = { user: null, name: "", isAdmin: false, memberships: [], pendingName: null, profileTried: false, view: null, g: null };
+const S = { user: null, name: "", avatar: "", isAdmin: false, memberships: [], pendingName: null, profileTried: false, view: null, g: null };
 const subs = { profile: null, memberships: null };
 let homeToken = 0;
 let adminToken = 0;
@@ -85,8 +105,26 @@ function setMsg(node, text, ok) {
   node.className = "feedback " + (ok ? "ok" : "err");
 }
 
+function avatarEl(m, size, isMe) {
+  const a = el("div", "avatar" + (isMe ? " me" : ""));
+  a.style.setProperty("--s", size + "px");
+  const src = safeAvatar(m.avatar);
+  if (src) {
+    const img = document.createElement("img");
+    img.src = src;
+    img.alt = "";
+    a.append(img);
+  } else {
+    a.textContent = ((m.name || "").trim()[0] || "?").toUpperCase();
+  }
+  return a;
+}
+
 function updateBadge() {
-  $("whoBadge").textContent = S.name + (S.isAdmin ? " · Admin" : "");
+  $("whoBadge").replaceChildren(
+    avatarEl({ name: S.name, avatar: S.avatar }, 28, true),
+    el("span", "wbName", S.name + (S.isAdmin ? " · Admin" : ""))
+  );
 }
 
 async function copyText(t) {
@@ -98,6 +136,181 @@ async function deleteRefs(refs) {
     const b = writeBatch(db);
     refs.slice(i, i + 400).forEach((r) => b.delete(r));
     await b.commit();
+  }
+}
+
+/* ---------- Animationen (Explosion und Konfetti) ---------- */
+
+const FX = { parts: [], raf: 0, ctx: null, dpr: 1 };
+const FX_COLORS = ["#ffcf5c", "#ffffff", "#6d96ff", "#ff7570", "#4dd98c", "#c58bff"];
+const reduceMotion = () => !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+function fxResize() {
+  const c = $("fx");
+  FX.dpr = Math.min(2, window.devicePixelRatio || 1);
+  c.width = Math.round(window.innerWidth * FX.dpr);
+  c.height = Math.round(window.innerHeight * FX.dpr);
+  FX.ctx = c.getContext("2d");
+}
+
+function fxLoop() {
+  const ctx = FX.ctx;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, $("fx").width, $("fx").height);
+  ctx.scale(FX.dpr, FX.dpr);
+  FX.parts = FX.parts.filter((p) => p.life > 0 && p.y < window.innerHeight + 40);
+  FX.parts.forEach((p) => {
+    p.life -= 1;
+    p.vx *= p.drag;
+    p.vy = p.vy * p.drag + p.g;
+    p.x += p.vx;
+    p.y += p.vy;
+    p.rot += p.vr;
+    ctx.globalAlpha = Math.min(1, p.life / 30);
+    ctx.fillStyle = p.color;
+    if (p.shape === "spark") {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillRect(-p.size / 2, -p.size / 3, p.size, p.size * 0.6);
+      ctx.restore();
+    }
+  });
+  ctx.globalAlpha = 1;
+  if (FX.parts.length) FX.raf = requestAnimationFrame(fxLoop);
+  else { FX.raf = 0; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, $("fx").width, $("fx").height); }
+}
+
+function fxAdd(list) {
+  if (reduceMotion()) return;
+  if (!FX.ctx) fxResize();
+  FX.parts.push(...list);
+  if (!FX.raf) FX.raf = requestAnimationFrame(fxLoop);
+}
+
+function explosion(x, y, n, colors) {
+  const list = [];
+  for (let i = 0; i < n; i++) {
+    const a = rnd(0, Math.PI * 2), s = rnd(3, 15);
+    list.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 2, g: 0.22, drag: 0.985, life: rnd(55, 115), size: rnd(2, 5.5), color: pick(colors || FX_COLORS), shape: "spark", rot: 0, vr: 0 });
+  }
+  fxAdd(list);
+}
+
+function confetti(n, colors) {
+  const list = [];
+  for (let i = 0; i < n; i++) {
+    list.push({ x: rnd(0, window.innerWidth), y: -rnd(10, 220), vx: rnd(-1.5, 1.5), vy: rnd(2, 5), g: 0.06, drag: 0.995, life: rnd(170, 270), size: rnd(7, 12), color: pick(colors || FX_COLORS), shape: "conf", rot: rnd(0, 6), vr: rnd(-0.2, 0.2) });
+  }
+  fxAdd(list);
+}
+
+const celQueue = [];
+let celebrating = false;
+
+function celebrateRank(kind, total, level) {
+  celQueue.push({ kind, total, level });
+  if (!celebrating) nextCelebration();
+}
+
+function nextCelebration() {
+  const c = celQueue.shift();
+  if (!c) { celebrating = false; $("celebrate").hidden = true; return; }
+  celebrating = true;
+  const r = rankFor(c.total);
+  $("celKicker").textContent = "Neuer Rang!";
+  $("celBadge").replaceChildren(rankImg(c.level, 168));
+  $("celName").textContent = r.name;
+  $("celSub").textContent = "Level " + c.level + " bei " + c.kind + " mit " + nf(c.total) + " Wiederholungen." +
+    (r.next ? " Als Nächstes wartet " + r.next.name + " bei " + nf(r.next.need) + "." : " Höher geht es nicht. Du bist eine Legende.");
+  $("celebrate").hidden = false;
+  requestAnimationFrame(() => {
+    const b = $("celBadge").getBoundingClientRect();
+    const x = b.left + b.width / 2, y = b.top + b.height / 2;
+    const mult = 1 + Math.min(1.5, c.level / 8);
+    const gold = ["#ffcf5c", "#ffe9a8", "#ffffff", "#f2b807"];
+    explosion(x, y, Math.round(140 * mult), FX_COLORS);
+    setTimeout(() => explosion(x, y, Math.round(110 * mult), gold), 320);
+    setTimeout(() => explosion(rnd(60, window.innerWidth - 60), rnd(120, window.innerHeight / 2), 80, FX_COLORS), 640);
+    confetti(Math.round(90 * mult));
+  });
+}
+
+/* ---------- Profil ---------- */
+
+function openProfile() {
+  $("profileAvatar").replaceChildren(avatarEl({ name: S.name, avatar: S.avatar }, 72, true));
+  $("profileName").textContent = S.name;
+  $("avatarRemove").hidden = !S.avatar;
+  setMsg($("profileMsg"), "");
+  $("profileModal").hidden = false;
+}
+
+function closeProfile() { $("profileModal").hidden = true; }
+
+async function loadBitmap(file) {
+  if (window.createImageBitmap) {
+    try { return await createImageBitmap(file, { imageOrientation: "from-image" }); } catch (e) { /* weiter mit Image */ }
+  }
+  return await new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("bild")); };
+    img.src = url;
+  });
+}
+
+async function fileToAvatar(file) {
+  const bmp = await loadBitmap(file);
+  const w = bmp.width, h = bmp.height, side = Math.min(w, h);
+  const c = document.createElement("canvas");
+  c.width = c.height = 160;
+  c.getContext("2d").drawImage(bmp, (w - side) / 2, (h - side) / 2, side, side, 0, 0, 160, 160);
+  let q = 0.85, url = "";
+  do { url = c.toDataURL("image/jpeg", q); q -= 0.1; } while (url.length > 22000 && q > 0.25);
+  if (url.length > 22000) throw new Error("zu gross");
+  return url;
+}
+
+async function saveAvatar(url) {
+  const uid = S.user.uid;
+  await setDoc(doc(db, "users", uid), { name: S.name, createdAt: nowIso(), avatar: url });
+  S.avatar = url;
+  updateBadge();
+  await Promise.all(S.memberships.map((gid) => updateDoc(doc(db, "groups", gid, "members", uid), { avatar: url }).catch(() => {})));
+}
+
+async function onAvatarPicked() {
+  const file = $("avatarFile").files && $("avatarFile").files[0];
+  $("avatarFile").value = "";
+  if (!file) return;
+  const msg = $("profileMsg");
+  setMsg(msg, "Bild wird verarbeitet …", true);
+  try {
+    const url = await fileToAvatar(file);
+    await saveAvatar(url);
+    $("profileAvatar").replaceChildren(avatarEl({ name: S.name, avatar: S.avatar }, 72, true));
+    $("avatarRemove").hidden = false;
+    setMsg(msg, "Profilbild gespeichert ✓", true);
+  } catch (err) {
+    setMsg(msg, "Das Bild konnte nicht gespeichert werden. Versuche ein anderes Foto.");
+  }
+}
+
+async function removeAvatar() {
+  const msg = $("profileMsg");
+  try {
+    await saveAvatar("");
+    $("profileAvatar").replaceChildren(avatarEl({ name: S.name, avatar: "" }, 72, true));
+    $("avatarRemove").hidden = true;
+    setMsg(msg, "Profilbild entfernt.", true);
+  } catch (err) {
+    setMsg(msg, "Das hat nicht geklappt. Bitte versuche es nochmal.");
   }
 }
 
@@ -175,15 +388,17 @@ function onAuth(user) {
   if (subs.memberships) subs.memberships();
   subs.profile = subs.memberships = null;
   stopGroup();
+  closeProfile();
 
   if (!user) {
-    S.name = ""; S.isAdmin = false; S.memberships = []; S.pendingName = null; S.profileTried = false;
+    S.name = ""; S.avatar = ""; S.isAdmin = false; S.memberships = []; S.pendingName = null; S.profileTried = false;
     $("authPass").value = "";
     show("viewAuth");
     return;
   }
 
   S.name = S.pendingName || user.displayName || (user.email || "").split("@")[0] || "Spieler";
+  S.avatar = "";
   updateBadge();
 
   getDoc(doc(db, "admins", user.uid)).then((s) => s.exists(), () => false).then((isAdmin) => {
@@ -197,6 +412,7 @@ function onAuth(user) {
   subs.profile = onSnapshot(doc(db, "users", user.uid), (snap) => {
     if (snap.exists()) {
       S.name = snap.data().name;
+      S.avatar = safeAvatar(snap.data().avatar);
       updateBadge();
     } else if (!S.profileTried) {
       S.profileTried = true;
@@ -285,7 +501,7 @@ async function joinGroup(e) {
     const gid = c.data().groupId;
     if (S.memberships.includes(gid)) { location.hash = "g/" + gid; return; }
     const now = nowIso();
-    await setDoc(doc(db, "groups", gid, "members", S.user.uid), { name: S.name, code, joinedAt: now });
+    await setDoc(doc(db, "groups", gid, "members", S.user.uid), { name: S.name, code, joinedAt: now, avatar: S.avatar || "" });
     await setDoc(doc(db, "users", S.user.uid, "groups", gid), { joinedAt: now });
     $("joinCode").value = "";
     location.hash = "g/" + gid;
@@ -334,7 +550,7 @@ async function createGroup(e) {
         await updateDoc(doc(db, "groups", gid), { code });
       }
     }
-    await setDoc(doc(db, "groups", gid, "members", uid), { name: S.name, code, joinedAt: now });
+    await setDoc(doc(db, "groups", gid, "members", uid), { name: S.name, code, joinedAt: now, avatar: S.avatar || "" });
     await setDoc(doc(db, "users", uid, "groups", gid), { joinedAt: now });
     $("createName").value = "";
     $("createDetails").open = false;
@@ -350,8 +566,13 @@ async function createGroup(e) {
 
 async function deleteGroupFully(gid, code) {
   const gref = doc(db, "groups", gid);
-  const [ents, mems] = await Promise.all([getDocs(collection(gref, "entries")), getDocs(collection(gref, "members"))]);
+  const [ents, mems, msgs, reacts] = await Promise.all([
+    getDocs(collection(gref, "entries")), getDocs(collection(gref, "members")),
+    getDocs(collection(gref, "messages")), getDocs(collection(gref, "reactions")),
+  ]);
   await deleteRefs(ents.docs.map((d) => d.ref));
+  await deleteRefs(msgs.docs.map((d) => d.ref));
+  await deleteRefs(reacts.docs.map((d) => d.ref));
   await deleteRefs(mems.docs.map((d) => doc(db, "users", d.id, "groups", gid)));
   await deleteRefs(mems.docs.map((d) => d.ref));
   try { await deleteDoc(doc(db, "groupCodes", code)); } catch (e) {}
@@ -379,9 +600,7 @@ async function openAdmin() {
     const a = el("a", "", "");
     a.href = "#g/" + d.id;
     a.style.cssText = "flex:1;color:inherit;text-decoration:none;";
-    const title = el("span", "", g.name);
-    const small = el("small", "", "Code " + g.code + " · " + g.situps + "/" + g.pushups + " · " + g.penalty + " €");
-    a.append(title, small);
+    a.append(el("span", "", g.name), el("small", "", "Code " + g.code + " · " + g.situps + "/" + g.pushups + " · " + g.penalty + " €"));
     const del = el("button", "secondary small", "Löschen");
     del.type = "button";
     del.addEventListener("click", async () => {
@@ -394,96 +613,6 @@ async function openAdmin() {
     list.append(row);
   });
 }
-
-/* ---------- group ---------- */
-
-function stopGroup() {
-  if (S.g) {
-    S.g.stopped = true;
-    S.g.unsubs.forEach((u) => u());
-    S.g = null;
-  }
-  $("viewGroup").classList.add("loading");
-}
-
-function startGroup(id) {
-  stopGroup();
-  const G = {
-    id, group: null, members: [], entries: [], index: new Map(),
-    selectedDate: todayStr(), formInit: false, stopped: false, unsubs: [],
-    loaded: { g: false, m: false, e: false },
-  };
-  S.g = G;
-  show("viewGroup");
-  $("groupName").textContent = "Lade …";
-  $("roleBadge").hidden = true;
-  $("adminTools").open = false;
-  setMsg($("editMsg"), "");
-  $("saveFeedback").hidden = true;
-  setTab("today");
-
-  const gref = doc(db, "groups", id);
-  const fail = (err) => {
-    if (G.stopped) return;
-    if (err && err.code === "permission-denied") {
-      flash("Du hast keinen Zugriff auf diese Gruppe (mehr).", "err");
-      deleteDoc(doc(db, "users", S.user.uid, "groups", id)).catch(() => {});
-      location.hash = "";
-    } else {
-      flash("Verbindung zu den Daten unterbrochen.", "err");
-    }
-  };
-
-  G.unsubs.push(onSnapshot(gref, (snap) => {
-    if (G.stopped) return;
-    if (!snap.exists()) { flash("Diese Gruppe gibt es nicht mehr.", "err"); location.hash = ""; return; }
-    G.group = snap.data(); G.loaded.g = true; renderGroup();
-  }, fail));
-  G.unsubs.push(onSnapshot(collection(gref, "members"), (snap) => {
-    if (G.stopped) return;
-    G.members = snap.docs.map((d) => ({ uid: d.id, name: String(d.data().name || "?") }));
-    G.loaded.m = true; renderGroup();
-  }, fail));
-  G.unsubs.push(onSnapshot(collection(gref, "entries"), (snap) => {
-    if (G.stopped) return;
-    G.entries = [];
-    G.index = new Map();
-    snap.docs.forEach((d) => {
-      const r = d.data();
-      if (typeof r.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(r.date)) return;
-      const e = { uid: String(r.uid), date: r.date, situps: cleanReps(r.situps), pushups: cleanReps(r.pushups), skipped: r.skipped === true };
-      G.entries.push(e);
-      G.index.set(e.date + "|" + e.uid, e);
-    });
-    G.loaded.e = true; renderGroup();
-  }, fail));
-}
-
-const entryFor = (G, uid, date) => G.index.get(date + "|" + uid) || null;
-const isMemberOf = (G) => G.members.some((m) => m.uid === S.user.uid);
-
-function statusFor(G, uid, date) {
-  const g = G.group;
-  const e = entryFor(G, uid, date);
-  if (!e) return { label: "Offen", cls: "pending" };
-  if (e.skipped) return { label: "Skip-Tag", cls: "skip" };
-  if (e.situps >= g.situps && e.pushups >= g.pushups) return { label: "Geschafft", cls: "success" };
-  return { label: "Verloren · " + g.penalty + "€", cls: "danger" };
-}
-
-function updateBars() {
-  const G = S.g;
-  if (!G || !G.group) return;
-  const s = cleanReps($("situpsInput").value), p = cleanReps($("pushupsInput").value);
-  $("situpsBar").style.width = Math.min(100, (s / G.group.situps) * 100) + "%";
-  $("situpsBar").classList.toggle("done", s >= G.group.situps);
-  $("pushupsBar").style.width = Math.min(100, (p / G.group.pushups) * 100) + "%";
-  $("pushupsBar").classList.toggle("done", p >= G.group.pushups);
-  $("situpsCount").textContent = s + " / " + G.group.situps;
-  $("pushupsCount").textContent = p + " / " + G.group.pushups;
-}
-
-const PANES = { today: "paneToday", rang: "paneRang", bilanz: "paneBilanz", verlauf: "paneVerlauf", gruppe: "paneGruppe" };
 
 /* ---------- Ränge ---------- */
 
@@ -503,7 +632,6 @@ const RANKS = [
   { name: "Mythos", min: 100000 },
 ];
 const HIGH_LEVEL = 7;
-const nf = (n) => n.toLocaleString("de-DE");
 
 function rankFor(total) {
   let i = 0;
@@ -525,7 +653,6 @@ function rankImg(level, size) {
   img.alt = "Rang " + level;
   img.width = size;
   img.height = size;
-  img.loading = "lazy";
   img.style.setProperty("--s", size + "px");
   return img;
 }
@@ -569,10 +696,11 @@ function renderBoard() {
     main.append(el("div", "bname", m.name + (m.uid === me ? " (du)" : "")));
     const rk = metric === "situps" || metric === "pushups" ? rankFor(v) : null;
     if (rk) main.append(rankChip(rk));
+    const wrap = el("div", "avWrap");
+    wrap.append(avatarEl(m, 44, m.uid === me));
+    if (rk) wrap.append(rankImg(rk.level, 22));
     const unit = cfg.unit ? (v === 1 ? " Tag" : " Tage") : "";
-    row.append(el("div", "pos" + (pos <= 3 && v > 0 ? " p" + pos : ""), String(pos)));
-    if (rk) row.append(rankImg(rk.level, 40));
-    row.append(main, el("div", "bval num", nf(v) + unit));
+    row.append(el("div", "pos" + (pos <= 3 && v > 0 ? " p" + pos : ""), String(pos)), wrap, main, el("div", "bval num", nf(v) + unit));
     return row;
   }));
   $("boardHint").textContent = cfg.hint;
@@ -616,11 +744,321 @@ function renderRanks(isMember) {
   renderBoard();
 }
 
+/* ---------- Reaktionen (Feed) ---------- */
+
+const PHRASES = [
+  { key: "hauen", tone: "win", text: "Du hast heute mal richtig reingehauen" },
+  { key: "maschine", tone: "win", text: "Du bist 'ne Maschine" },
+  { key: "bizeps", tone: "win", text: "Dein Bizeps schickt Grüße" },
+  { key: "mensch", tone: "win", text: "Bist du überhaupt noch ein Mensch?" },
+  { key: "respekt", tone: "win", text: "Respekt, Chef" },
+  { key: "muskel", tone: "win", text: "Heute Muskelkater, morgen Legende" },
+  { key: "schnecke", tone: "lose", text: "Das war wohl die Schnecken-Edition" },
+  { key: "geldbeutel", tone: "lose", text: "Dein Geldbeutel weint schon" },
+  { key: "couch", tone: "lose", text: "Die Couch hat gewonnen" },
+  { key: "ausrede", tone: "lose", text: "Ausreden nehme ich nur in bar" },
+  { key: "ueberweisung", tone: "lose", text: "Überweisung oder Bargeld?" },
+  { key: "pause", tone: "lose", text: "Hat da jemand Pause gemacht?" },
+  { key: "urlaub", tone: "skip", text: "Urlaub vom Schweiß, wie schön" },
+  { key: "faul", tone: "skip", text: "Faulenzen mit Erlaubnis" },
+  { key: "joker", tone: "skip", text: "Der Joker sitzt, gut gespielt" },
+  { key: "weiter", tone: "any", text: "Weiter so" },
+  { key: "lach", tone: "any", text: "Ich lach mich schlapp" },
+  { key: "coach", tone: "any", text: "Dein Coach ist stolz auf dich" },
+];
+const PHRASE_BY_KEY = new Map(PHRASES.map((p) => [p.key, p]));
+
+function toneFor(cls) {
+  return cls === "success" ? "win" : cls === "danger" ? "lose" : "skip";
+}
+
+async function toggleReaction(entryId, date, key) {
+  const G = S.g;
+  if (!G) return;
+  if (!isMemberOf(G)) { flash("Nur Mitglieder können reagieren.", "err"); return; }
+  const uid = S.user.uid;
+  const rid = entryId + "_" + uid + "_" + key;
+  const has = G.reactions.some((r) => r.entryId === entryId && r.uid === uid && r.key === key);
+  try {
+    if (has) await deleteDoc(doc(db, "groups", G.id, "reactions", rid));
+    else await setDoc(doc(db, "groups", G.id, "reactions", rid), { entryId, date, uid, key, createdAt: nowIso() });
+  } catch (err) {
+    flash("Die Reaktion hat nicht geklappt.", "err");
+  }
+}
+
+function renderFeed() {
+  const G = S.g;
+  if (!G || !G.loaded.m || !G.loaded.e || !G.group) return;
+  const me = S.user.uid;
+  const cutoff = addDays(todayStr(), -13);
+  const byUid = new Map(G.members.map((m) => [m.uid, m]));
+  const items = G.entries
+    .filter((e) => byUid.has(e.uid) && e.date >= cutoff)
+    .sort((a, b) => b.date.localeCompare(a.date) || byUid.get(a.uid).name.localeCompare(byUid.get(b.uid).name, "de"));
+  $("feedEmpty").hidden = items.length > 0;
+
+  const byEntry = new Map();
+  G.reactions.forEach((r) => {
+    if (!PHRASE_BY_KEY.has(r.key)) return;
+    if (!byEntry.has(r.entryId)) byEntry.set(r.entryId, []);
+    byEntry.get(r.entryId).push(r);
+  });
+
+  $("feedList").replaceChildren(...items.map((e) => {
+    const m = byUid.get(e.uid);
+    const entryId = e.date + "_" + e.uid;
+    const st = statusFor(G, e.uid, e.date);
+    const card = el("div", "act");
+
+    const head = el("div", "actHead");
+    const main = el("div", "actMain");
+    main.append(el("div", "actName", m.name + (e.uid === me ? " (du)" : "")), el("div", "actDate", dayLabel(e.date)));
+    head.append(avatarEl(m, 40, e.uid === me), main, el("span", "pill " + st.cls, st.label));
+
+    const body = el("div", "actBody", e.skipped ? "Hat den Skip-Tag genutzt." : nf(e.situps) + " Sit-ups und " + nf(e.pushups) + " Liegestütze");
+
+    const reacts = el("div", "reacts");
+    const mine = new Set();
+    const groups = new Map();
+    (byEntry.get(entryId) || []).forEach((r) => {
+      if (!groups.has(r.key)) groups.set(r.key, []);
+      groups.get(r.key).push(r.uid);
+      if (r.uid === me) mine.add(r.key);
+    });
+    PHRASES.filter((p) => groups.has(p.key)).forEach((p) => {
+      const uids = groups.get(p.key);
+      const chip = el("button", "chip" + (mine.has(p.key) ? " mine" : ""), p.text + " ");
+      chip.type = "button";
+      chip.title = uids.map((u) => (byUid.get(u) ? byUid.get(u).name : "?")).join(", ");
+      chip.append(el("b", "", String(uids.length)));
+      chip.addEventListener("click", () => toggleReaction(entryId, e.date, p.key));
+      reacts.append(chip);
+    });
+    const add = el("button", "chip add", G.openPicker === entryId ? "Schließen" : "Reagieren");
+    add.type = "button";
+    add.addEventListener("click", () => { G.openPicker = G.openPicker === entryId ? null : entryId; renderFeed(); });
+    reacts.append(add);
+
+    card.append(head, body, reacts);
+
+    if (G.openPicker === entryId) {
+      const tone = toneFor(st.cls);
+      const picker = el("div", "picker");
+      PHRASES.filter((p) => p.tone === tone || p.tone === "any").forEach((p) => {
+        const b = el("button", "chip" + (mine.has(p.key) ? " mine" : ""), p.text);
+        b.type = "button";
+        b.addEventListener("click", () => { G.openPicker = null; toggleReaction(entryId, e.date, p.key); renderFeed(); });
+        picker.append(b);
+      });
+      card.append(picker);
+    }
+    return card;
+  }));
+}
+
+/* ---------- Chat ---------- */
+
+const chatSeenKey = (id) => "sop_chat_seen_" + (S.user ? S.user.uid : "x") + "_" + id;
+function getSeen(id) { try { return localStorage.getItem(chatSeenKey(id)) || ""; } catch (e) { return ""; } }
+function setSeen(id, v) { try { localStorage.setItem(chatSeenKey(id), v); } catch (e) {} }
+
+function updateChatBadge() {
+  const G = S.g;
+  if (!G) return;
+  const last = G.messages.length ? G.messages[G.messages.length - 1].createdAt : "";
+  if (G.tab === "chat" && last) setSeen(G.id, last);
+  const seen = getSeen(G.id);
+  const unread = G.tab === "chat" ? 0 : G.messages.filter((m) => m.uid !== S.user.uid && m.createdAt > seen).length;
+  const b = $("chatBadge");
+  b.hidden = unread === 0;
+  b.textContent = unread > 9 ? "9+" : String(unread);
+}
+
+function scrollChatBottom() {
+  const l = $("chatList");
+  l.scrollTop = l.scrollHeight;
+}
+
+function renderChat() {
+  const G = S.g;
+  if (!G || !G.loaded.m) return;
+  const me = S.user.uid;
+  const list = $("chatList");
+  const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 90;
+  const byUid = new Map(G.members.map((m) => [m.uid, m]));
+  const nodes = [];
+  let lastDay = "";
+  G.messages.forEach((m) => {
+    const day = fmtYmd(new Date(m.createdAt));
+    if (day !== lastDay) { nodes.push(el("div", "dayDivider", dayLabel(day))); lastDay = day; }
+    const mine = m.uid === me;
+    const author = byUid.get(m.uid) || { name: "Ehemaliges Mitglied", avatar: "" };
+    const row = el("div", "msg" + (mine ? " mine" : ""));
+    const bubble = el("div", "bubble");
+    if (!mine) bubble.append(el("div", "bubbleName", author.name));
+    bubble.append(el("div", "bubbleText", m.text));
+    const meta = el("div", "bubbleMeta");
+    meta.append(el("span", "", timeOf(m.createdAt)));
+    if (mine || (G.group && G.group.adminUid === me) || S.isAdmin) {
+      const del = el("button", "", "Löschen");
+      del.type = "button";
+      del.addEventListener("click", async () => {
+        if (!confirm("Nachricht löschen?")) return;
+        try { await deleteDoc(doc(db, "groups", G.id, "messages", m.id)); } catch (e) { flash("Löschen hat nicht geklappt.", "err"); }
+      });
+      meta.append(del);
+    }
+    bubble.append(meta);
+    if (mine) row.append(bubble); else row.append(avatarEl(author, 32, false), bubble);
+    nodes.push(row);
+  });
+  list.replaceChildren(...nodes);
+  $("chatEmpty").hidden = G.messages.length > 0;
+  $("chatList").hidden = G.messages.length === 0;
+  $("chatForm").hidden = !isMemberOf(G);
+  if (nearBottom || !G.chatScrolled) { scrollChatBottom(); if (G.tab === "chat") G.chatScrolled = true; }
+  updateChatBadge();
+}
+
+async function sendChat(e) {
+  e.preventDefault();
+  const G = S.g;
+  if (!G || !isMemberOf(G)) return;
+  const text = $("chatInput").value.trim();
+  if (!text) return;
+  $("chatSend").disabled = true;
+  try {
+    await setDoc(doc(collection(db, "groups", G.id, "messages")), { uid: S.user.uid, text: text.slice(0, 500), createdAt: nowIso() });
+    $("chatInput").value = "";
+    G.chatScrolled = false;
+  } catch (err) {
+    flash("Die Nachricht konnte nicht gesendet werden.", "err");
+  } finally {
+    $("chatSend").disabled = false;
+    $("chatInput").focus();
+  }
+}
+
+/* ---------- group ---------- */
+
+function stopGroup() {
+  if (S.g) {
+    S.g.stopped = true;
+    S.g.unsubs.forEach((u) => u());
+    S.g = null;
+  }
+  $("viewGroup").classList.add("loading");
+}
+
+function startGroup(id) {
+  stopGroup();
+  const G = {
+    id, group: null, members: [], entries: [], index: new Map(), messages: [], reactions: [],
+    selectedDate: todayStr(), formInit: false, stopped: false, unsubs: [], tab: "today", sec: "bilanz",
+    openPicker: null, chatScrolled: false,
+    loaded: { g: false, m: false, e: false },
+  };
+  S.g = G;
+  if (!getSeen(id)) setSeen(id, nowIso());
+  show("viewGroup");
+  $("groupName").textContent = "Lade …";
+  $("roleBadge").hidden = true;
+  $("adminTools").open = false;
+  $("chatBadge").hidden = true;
+  setMsg($("editMsg"), "");
+  $("saveFeedback").hidden = true;
+  setTab("today");
+  setSec("bilanz");
+
+  const gref = doc(db, "groups", id);
+  const fail = (err) => {
+    if (G.stopped) return;
+    if (err && err.code === "permission-denied") {
+      flash("Du hast keinen Zugriff auf diese Gruppe (mehr).", "err");
+      deleteDoc(doc(db, "users", S.user.uid, "groups", id)).catch(() => {});
+      location.hash = "";
+    } else {
+      flash("Verbindung zu den Daten unterbrochen.", "err");
+    }
+  };
+
+  G.unsubs.push(onSnapshot(gref, (snap) => {
+    if (G.stopped) return;
+    if (!snap.exists()) { flash("Diese Gruppe gibt es nicht mehr.", "err"); location.hash = ""; return; }
+    G.group = snap.data(); G.loaded.g = true; renderGroup();
+  }, fail));
+  G.unsubs.push(onSnapshot(collection(gref, "members"), (snap) => {
+    if (G.stopped) return;
+    G.members = snap.docs.map((d) => ({ uid: d.id, name: String(d.data().name || "?"), avatar: safeAvatar(d.data().avatar) }));
+    G.loaded.m = true; renderGroup();
+  }, fail));
+  G.unsubs.push(onSnapshot(collection(gref, "entries"), (snap) => {
+    if (G.stopped) return;
+    G.entries = [];
+    G.index = new Map();
+    snap.docs.forEach((d) => {
+      const r = d.data();
+      if (typeof r.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(r.date)) return;
+      const e = { uid: String(r.uid), date: r.date, situps: cleanReps(r.situps), pushups: cleanReps(r.pushups), skipped: r.skipped === true };
+      G.entries.push(e);
+      G.index.set(e.date + "|" + e.uid, e);
+    });
+    G.loaded.e = true; renderGroup();
+  }, fail));
+  G.unsubs.push(onSnapshot(query(collection(gref, "messages"), orderBy("createdAt", "desc"), limit(150)), (snap) => {
+    if (G.stopped) return;
+    G.messages = snap.docs
+      .map((d) => ({ id: d.id, uid: String(d.data().uid), text: String(d.data().text || ""), createdAt: String(d.data().createdAt || "") }))
+      .filter((m) => m.text && m.createdAt)
+      .reverse();
+    renderChat();
+  }, () => {}));
+  G.unsubs.push(onSnapshot(query(collection(gref, "reactions"), where("date", ">=", addDays(todayStr(), -14))), (snap) => {
+    if (G.stopped) return;
+    G.reactions = snap.docs.map((d) => d.data()).filter((r) => typeof r.entryId === "string" && typeof r.key === "string" && typeof r.uid === "string");
+    renderFeed();
+  }, () => {}));
+}
+
+const entryFor = (G, uid, date) => G.index.get(date + "|" + uid) || null;
+const isMemberOf = (G) => G.members.some((m) => m.uid === S.user.uid);
+
+function statusFor(G, uid, date) {
+  const g = G.group;
+  const e = entryFor(G, uid, date);
+  if (!e) return { label: "Offen", cls: "pending" };
+  if (e.skipped) return { label: "Skip-Tag", cls: "skip" };
+  if (e.situps >= g.situps && e.pushups >= g.pushups) return { label: "Geschafft", cls: "success" };
+  return { label: "Verloren · " + g.penalty + "€", cls: "danger" };
+}
+
+function updateBars() {
+  const G = S.g;
+  if (!G || !G.group) return;
+  const s = cleanReps($("situpsInput").value), p = cleanReps($("pushupsInput").value);
+  $("situpsBar").style.width = Math.min(100, (s / G.group.situps) * 100) + "%";
+  $("situpsBar").classList.toggle("done", s >= G.group.situps);
+  $("pushupsBar").style.width = Math.min(100, (p / G.group.pushups) * 100) + "%";
+  $("pushupsBar").classList.toggle("done", p >= G.group.pushups);
+  $("situpsCount").textContent = s + " / " + G.group.situps;
+  $("pushupsCount").textContent = p + " / " + G.group.pushups;
+}
+
+const PANES = { today: "paneToday", feed: "paneFeed", rang: "paneRang", chat: "paneChat", gruppe: "paneGruppe" };
 function setTab(tab) {
   if (S.g) S.g.tab = tab;
   Object.keys(PANES).forEach((t) => { $(PANES[t]).hidden = t !== tab; });
   document.querySelectorAll(".tabbar button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   window.scrollTo(0, 0);
+  if (tab === "chat" && S.g) { scrollChatBottom(); S.g.chatScrolled = true; updateChatBadge(); }
+}
+
+const SECS = { bilanz: "secBilanz", verlauf: "secVerlauf", info: "secInfo" };
+function setSec(sec) {
+  if (S.g) S.g.sec = sec;
+  Object.keys(SECS).forEach((s) => { $(SECS[s]).hidden = s !== sec; });
+  document.querySelectorAll("#groupSeg button").forEach((b) => b.classList.toggle("active", b.dataset.sec === sec));
 }
 
 function loadForm() {
@@ -681,7 +1119,7 @@ function renderGroup() {
       el("div", "personName", m.name + (m.uid === me ? " (du)" : "")),
       el("div", "personSub", e ? (e.skipped ? "Skip-Tag genutzt" : e.situps + " Sit-ups · " + e.pushups + " Liegestütze") : "Noch nichts eingetragen")
     );
-    row.append(el("div", "avatar" + (m.uid === me ? " me" : ""), (m.name.trim()[0] || "?").toUpperCase()), main, el("span", "pill " + s.cls, s.label));
+    row.append(avatarEl(m, 40, m.uid === me), main, el("span", "pill " + s.cls, s.label));
     return row;
   }));
 
@@ -710,8 +1148,8 @@ function renderGroup() {
     tr.append(
       el("td", "nameCell", m.name + (m.uid === me ? " (du)" : "")),
       debt,
-      el("td", "r num", sit[m.uid].toLocaleString("de-DE")),
-      el("td", "r num", push[m.uid].toLocaleString("de-DE"))
+      el("td", "r num", nf(sit[m.uid])),
+      el("td", "r num", nf(push[m.uid]))
     );
     tbody.append(tr);
   });
@@ -754,10 +1192,10 @@ function renderGroup() {
   $("shareCode").hidden = !navigator.share;
   $("memberList").replaceChildren(...members.map((m) => {
     const row = el("div", "memberRow");
-    const left = el("span", "", m.name);
+    const left = el("span", "memberLeft", m.name);
     if (m.uid === me) left.append(el("span", "tag", "(du)"));
     if (m.uid === grp.adminUid) left.append(el("span", "tag", "Admin"));
-    row.append(left);
+    row.append(avatarEl(m, 34, m.uid === me), left);
     if (canManage && m.uid !== grp.adminUid) {
       const b = el("button", "", "Entfernen");
       b.type = "button";
@@ -776,6 +1214,9 @@ function renderGroup() {
     $("editPenalty").value = grp.penalty;
   }
   $("leaveBtn").hidden = !(member && !isGAdmin);
+
+  renderFeed();
+  renderChat();
 }
 
 /* ---------- group actions ---------- */
@@ -783,22 +1224,45 @@ function renderGroup() {
 async function saveEntry() {
   const G = S.g;
   if (!G || !isMemberOf(G)) return;
+  const uid = S.user.uid, grp = G.group;
   const date = $("dateInput").value || G.selectedDate;
   const data = {
-    uid: S.user.uid,
+    uid,
     date,
     situps: cleanReps($("situpsInput").value),
     pushups: cleanReps($("pushupsInput").value),
     skipped: $("skipInput").checked && !$("skipInput").disabled,
     updatedAt: nowIso(),
   };
+
+  const old = entryFor(G, uid, date);
+  const st = (G.stats && G.stats[uid]) || { sit: 0, push: 0 };
+  const after = { sit: st.sit - (old ? old.situps : 0) + data.situps, push: st.push - (old ? old.pushups : 0) + data.pushups };
+  const goalWas = !!(old && !old.skipped && old.situps >= grp.situps && old.pushups >= grp.pushups);
+  const goalNow = !data.skipped && data.situps >= grp.situps && data.pushups >= grp.pushups;
+
   const fb = $("saveFeedback");
   $("saveBtn").disabled = true;
   fb.hidden = true;
   try {
     const slow = new Promise((resolve) => setTimeout(() => resolve("slow"), 8000));
-    const res = await Promise.race([setDoc(doc(db, "groups", G.id, "entries", date + "_" + S.user.uid), data), slow]);
-    setMsg(fb, res === "slow" ? "Wird gespeichert, sobald du wieder online bist." : "Gespeichert ✓", true);
+    const res = await Promise.race([setDoc(doc(db, "groups", G.id, "entries", date + "_" + uid), data), slow]);
+    if (res === "slow") {
+      setMsg(fb, "Wird gespeichert, sobald du wieder online bist.", true);
+    } else {
+      setMsg(fb, goalNow && !goalWas ? "Gespeichert ✓ Tagesziel geschafft!" : "Gespeichert ✓", true);
+      let ranked = false;
+      [["Sit-ups", st.sit, after.sit], ["Liegestütze", st.push, after.push]].forEach(([kind, before, now]) => {
+        const lv = rankFor(now).level;
+        if (lv > rankFor(before).level) { celebrateRank(kind, now, lv); ranked = true; }
+      });
+      if (!ranked && goalNow && !goalWas) {
+        const w = window.innerWidth;
+        confetti(110);
+        explosion(w * 0.25, window.innerHeight * 0.55, 40);
+        explosion(w * 0.75, window.innerHeight * 0.55, 40);
+      }
+    }
   } catch (err) {
     setMsg(fb, "Speichern hat nicht geklappt. Prüfe deine Verbindung.");
   } finally {
@@ -835,7 +1299,7 @@ async function leaveGroup() {
 
 async function deleteGroup() {
   const G = S.g;
-  if (!G || !confirm("Gruppe \"" + G.group.name + "\" mit allen Einträgen endgültig löschen? Das kann nicht rückgängig gemacht werden.")) return;
+  if (!G || !confirm("Gruppe \"" + G.group.name + "\" mit allen Einträgen und Chatnachrichten endgültig löschen? Das kann nicht rückgängig gemacht werden.")) return;
   const { id } = G, code = G.group.code;
   stopGroup();
   try {
@@ -892,6 +1356,15 @@ function wire() {
   $("createForm").addEventListener("submit", createGroup);
   $("adminBtn").addEventListener("click", () => { location.hash = "admin"; });
   window.addEventListener("hashchange", route);
+  window.addEventListener("resize", () => { if (FX.ctx) fxResize(); });
+
+  $("whoBadge").addEventListener("click", openProfile);
+  $("profileClose").addEventListener("click", closeProfile);
+  $("profileModal").addEventListener("click", (e) => { if (e.target === $("profileModal")) closeProfile(); });
+  $("avatarPick").addEventListener("click", () => $("avatarFile").click());
+  $("avatarFile").addEventListener("change", onAvatarPicked);
+  $("avatarRemove").addEventListener("click", removeAvatar);
+  $("celClose").addEventListener("click", nextCelebration);
 
   $("dateInput").addEventListener("change", () => {
     const G = S.g;
@@ -911,11 +1384,13 @@ function wire() {
   $("pushupsInput").addEventListener("input", updateBars);
   $("saveBtn").addEventListener("click", saveEntry);
   document.querySelectorAll(".tabbar button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+  document.querySelectorAll("#groupSeg button").forEach((b) => b.addEventListener("click", () => setSec(b.dataset.sec)));
   document.querySelectorAll("#metricSeg button").forEach((b) => b.addEventListener("click", () => {
     if (!S.g) return;
     S.g.metric = b.dataset.metric;
     renderBoard();
   }));
+  $("chatForm").addEventListener("submit", sendChat);
 
   $("copyCode").addEventListener("click", async () => {
     if (!S.g) return;
