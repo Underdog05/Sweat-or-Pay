@@ -11,4 +11,10 @@ export const CONFIG = {
     messagingSenderId: "406213478169",
     appId: "1:406213478169:web:8e7ff233bb36eea82ca788",
   },
+
+  // Handy-Benachrichtigungen (kostenloser Cloudflare-Worker). Solange hier nichts steht, ist die Funktion aus.
+  push: {
+    workerUrl: "https://sweat-or-pay-push.machatzkedevin.workers.dev",
+    vapidPublicKey: "BAUg5b-jBvZMrJDBT1zlaupB-p-24sa_9p3Fo0Xp7vNsCDB_QcpGcykwnS_hlm0rA4fFUUACMG2iuDteX8LDUIE",
+  },
 };

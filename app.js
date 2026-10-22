@@ -248,6 +248,7 @@ function openProfile() {
   $("avatarRemove").hidden = !S.avatar;
   setMsg($("profileMsg"), "");
   $("profileModal").hidden = false;
+  refreshPushUi();
 }
 
 function closeProfile() { $("profileModal").hidden = true; }
@@ -312,6 +313,105 @@ async function removeAvatar() {
   } catch (err) {
     setMsg(msg, "Das hat nicht geklappt. Bitte versuche es nochmal.");
   }
+}
+
+/* ---------- Handy-Benachrichtigungen ---------- */
+
+const PUSH = CONFIG.push && CONFIG.push.workerUrl && CONFIG.push.vapidPublicKey ? CONFIG.push : null;
+const isIos = () => /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isStandalone = () => (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+const pushSupported = () => !!(PUSH && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window);
+const pushFlagKey = () => "sop_push_" + (S.user ? S.user.uid : "x");
+const getPushFlag = () => { try { return localStorage.getItem(pushFlagKey()) === "1"; } catch (e) { return false; } };
+const setPushFlag = (on) => { try { if (on) localStorage.setItem(pushFlagKey(), "1"); else localStorage.removeItem(pushFlagKey()); } catch (e) {} };
+const withTimeout = (p, ms) => Promise.race([p, new Promise((resolve) => setTimeout(resolve, ms))]);
+
+function urlB64ToBytes(s) {
+  const t = s.replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(t + "=".repeat((4 - (t.length % 4)) % 4)), (c) => c.charCodeAt(0));
+}
+
+async function pushCall(path, body) {
+  const token = await auth.currentUser.getIdToken();
+  const res = await fetch(PUSH.workerUrl.replace(/\/$/, "") + path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error("push " + res.status);
+  return res.json();
+}
+
+async function currentSub() {
+  const reg = await navigator.serviceWorker.getRegistration();
+  return reg ? await reg.pushManager.getSubscription() : null;
+}
+
+async function refreshPushUi() {
+  const box = $("pushBox");
+  if (!PUSH) { box.hidden = true; return; }
+  box.hidden = false;
+  const hint = $("pushHint"), btn = $("pushToggle");
+  btn.disabled = false;
+  if (!pushSupported()) { hint.textContent = "Dieses Gerät oder dieser Browser unterstützt keine Benachrichtigungen."; btn.hidden = true; return; }
+  if (isIos() && !isStandalone()) {
+    hint.textContent = "Auf dem iPhone zuerst über Teilen und „Zum Home-Bildschirm“ installieren und die App von dort öffnen.";
+    btn.hidden = true;
+    return;
+  }
+  if (Notification.permission === "denied") { hint.textContent = "Benachrichtigungen sind in den Browser-Einstellungen blockiert."; btn.hidden = true; return; }
+  btn.hidden = false;
+  const sub = await currentSub().catch(() => null);
+  const on = !!sub && Notification.permission === "granted" && getPushFlag();
+  hint.textContent = on ? "An. Du bekommst eine Meldung, wenn jemand im Gruppenchat schreibt." : "Aus. Aktiviere sie, um bei neuen Chat-Nachrichten benachrichtigt zu werden.";
+  btn.textContent = on ? "Ausschalten" : "Aktivieren";
+  btn.dataset.on = on ? "1" : "0";
+}
+
+async function togglePush() {
+  const msg = $("profileMsg"), btn = $("pushToggle");
+  btn.disabled = true;
+  try {
+    if (btn.dataset.on === "1") {
+      const sub = await currentSub();
+      if (sub) await pushCall("/unsubscribe", { endpoint: sub.endpoint }).catch(() => {});
+      setPushFlag(false);
+      setMsg(msg, "Benachrichtigungen ausgeschaltet.", true);
+    } else {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") { setMsg(msg, "Ohne Erlaubnis kann die App keine Meldungen schicken."); return; }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = (await reg.pushManager.getSubscription()) ||
+        (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToBytes(PUSH.vapidPublicKey) }));
+      await pushCall("/subscribe", { subscription: sub.toJSON() });
+      setPushFlag(true);
+      setMsg(msg, "Benachrichtigungen sind an ✓", true);
+    }
+  } catch (err) {
+    setMsg(msg, "Das hat nicht geklappt. Bitte versuche es nochmal.");
+  } finally {
+    await refreshPushUi();
+  }
+}
+
+async function syncPush() {
+  if (!pushSupported() || Notification.permission !== "granted" || !getPushFlag()) return;
+  try {
+    const sub = await currentSub();
+    if (sub) await pushCall("/subscribe", { subscription: sub.toJSON() });
+  } catch (e) { /* beim nächsten Start nochmal */ }
+}
+
+async function dropPushForLogout() {
+  if (!pushSupported()) return;
+  try {
+    const sub = await currentSub();
+    if (sub) await pushCall("/unsubscribe", { endpoint: sub.endpoint });
+  } catch (e) { /* egal */ }
+}
+
+function notifyChat(gid, text) {
+  if (PUSH) pushCall("/notify", { gid, text }).catch(() => {});
 }
 
 /* ---------- auth ---------- */
@@ -425,6 +525,7 @@ function onAuth(user) {
     if (S.view === "viewHome") renderHome();
   }, () => {});
 
+  syncPush();
   route();
 }
 
@@ -434,8 +535,9 @@ function route() {
   if (!S.user) { show("viewAuth"); return; }
   const h = location.hash;
   if (h.startsWith("#g/")) {
-    const id = h.slice(3);
+    const [id, sub] = h.slice(3).split("/");
     if (!S.g || S.g.id !== id) startGroup(id);
+    if (sub && PANES[sub]) setTab(sub);
     show("viewGroup");
   } else if (h === "#admin" && S.isAdmin) {
     stopGroup();
@@ -932,6 +1034,7 @@ async function sendChat(e) {
     await setDoc(doc(collection(db, "groups", G.id, "messages")), { uid: S.user.uid, text: text.slice(0, 500), createdAt: nowIso() });
     $("chatInput").value = "";
     G.chatScrolled = false;
+    notifyChat(G.id, text);
   } catch (err) {
     flash("Die Nachricht konnte nicht gesendet werden.", "err");
   } finally {
@@ -1351,7 +1454,11 @@ function wire() {
   $("tabRegister").addEventListener("click", () => setAuthMode("register"));
   $("authForm").addEventListener("submit", submitAuth);
   $("forgotBtn").addEventListener("click", forgotPassword);
-  $("logoutBtn").addEventListener("click", () => { location.hash = ""; signOut(auth); });
+  $("logoutBtn").addEventListener("click", async () => {
+    location.hash = "";
+    await withTimeout(dropPushForLogout(), 2000);
+    signOut(auth);
+  });
   $("joinForm").addEventListener("submit", joinGroup);
   $("createForm").addEventListener("submit", createGroup);
   $("adminBtn").addEventListener("click", () => { location.hash = "admin"; });
@@ -1364,6 +1471,7 @@ function wire() {
   $("avatarPick").addEventListener("click", () => $("avatarFile").click());
   $("avatarFile").addEventListener("change", onAvatarPicked);
   $("avatarRemove").addEventListener("click", removeAvatar);
+  $("pushToggle").addEventListener("click", togglePush);
   $("celClose").addEventListener("click", nextCelebration);
 
   $("dateInput").addEventListener("change", () => {
