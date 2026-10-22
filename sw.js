@@ -1,4 +1,4 @@
-const CACHE = "sweat-or-pay-v2";
+const CACHE = "sweat-or-pay-v3";
 const SHELL = ["./", "./index.html", "./style.css", "./app.js", "./config.js", "./manifest.webmanifest", "./icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
@@ -41,3 +41,4 @@ self.addEventListener("fetch", (event) => {
       .catch(() => caches.match(req).then((hit) => hit || caches.match("./index.html")))
   );
 });
+

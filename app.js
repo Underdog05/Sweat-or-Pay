@@ -420,6 +420,7 @@ function startGroup(id) {
   $("adminTools").open = false;
   setMsg($("editMsg"), "");
   $("saveFeedback").hidden = true;
+  setTab("today");
 
   const gref = doc(db, "groups", id);
   const fail = (err) => {
@@ -478,6 +479,16 @@ function updateBars() {
   $("situpsBar").classList.toggle("done", s >= G.group.situps);
   $("pushupsBar").style.width = Math.min(100, (p / G.group.pushups) * 100) + "%";
   $("pushupsBar").classList.toggle("done", p >= G.group.pushups);
+  $("situpsCount").textContent = s + " / " + G.group.situps;
+  $("pushupsCount").textContent = p + " / " + G.group.pushups;
+}
+
+const PANES = { today: "paneToday", bilanz: "paneBilanz", verlauf: "paneVerlauf", gruppe: "paneGruppe" };
+function setTab(tab) {
+  if (S.g) S.g.tab = tab;
+  Object.keys(PANES).forEach((t) => { $(PANES[t]).hidden = t !== tab; });
+  document.querySelectorAll(".tabbar button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  window.scrollTo(0, 0);
 }
 
 function loadForm() {
@@ -530,16 +541,16 @@ function renderGroup() {
 
   const today = todayStr();
 
-  const statusRow = $("statusRow");
-  statusRow.replaceChildren(...members.map((m) => {
+  $("todayList").replaceChildren(...members.map((m) => {
     const s = statusFor(G, m.uid, today), e = entryFor(G, m.uid, today);
-    const card = el("div", "statusCard");
-    card.append(
-      el("div", "name", (m.uid === me ? "Du" : m.name) + " · heute"),
-      el("span", "pill " + s.cls, s.label),
-      el("div", "nums num", e ? e.situps + " Sit-ups · " + e.pushups + " Liegestütze" : "Noch nichts eingetragen")
+    const row = el("div", "person");
+    const main = el("div", "personMain");
+    main.append(
+      el("div", "personName", m.name + (m.uid === me ? " (du)" : "")),
+      el("div", "personSub", e ? (e.skipped ? "Skip-Tag genutzt" : e.situps + " Sit-ups · " + e.pushups + " Liegestütze") : "Noch nichts eingetragen")
     );
-    return card;
+    row.append(el("div", "avatar" + (m.uid === me ? " me" : ""), (m.name.trim()[0] || "?").toUpperCase()), main, el("span", "pill " + s.cls, s.label));
+    return row;
   }));
 
   const lost = {}, sit = {}, push = {};
@@ -550,28 +561,31 @@ function renderGroup() {
     push[e.uid] += e.pushups;
     if (!e.skipped && (e.situps < grp.situps || e.pushups < grp.pushups)) lost[e.uid] += 1;
   });
-  $("debtRow").replaceChildren(...members.map((m) => {
-    const col = el("div", "totalsCol");
-    const owed = lost[m.uid] * grp.penalty;
-    col.append(
-      el("div", "totalsName", (m.uid === me ? "Du schuldest" : m.name + " schuldet")),
-      el("div", "totalsNum debtNum num" + (owed === 0 ? " zero" : ""), owed + " €"),
-      el("div", "totalsLabel", lost[m.uid] + (lost[m.uid] === 1 ? " verlorener Tag" : " verlorene Tage"))
-    );
-    return col;
-  }));
-  $("totalsRow").replaceChildren(...members.map((m) => {
-    const col = el("div", "totalsCol");
-    col.append(
-      el("div", "totalsName", m.uid === me ? "Du" : m.name),
-      el("div", "totalsNum num", String(sit[m.uid])),
-      el("div", "totalsLabel", "Sit-ups"),
-      el("div", "totalsNum num", String(push[m.uid])),
-      el("div", "totalsLabel", "Liegestütze")
-    );
-    return col;
-  }));
 
+  const thead = el("thead");
+  const headRow = el("tr");
+  ["Mitglied", "Schulden", "Sit-ups", "Liegestütze"].forEach((t, i) => headRow.append(el("th", i ? "r" : "", t)));
+  thead.append(headRow);
+  const tbody = el("tbody");
+  members.forEach((m) => {
+    const tr = el("tr", m.uid === me ? "me" : "");
+    const owed = lost[m.uid] * grp.penalty;
+    const debt = el("td", "r");
+    debt.append(
+      el("div", "debtNum num" + (owed === 0 ? " zero" : ""), owed + " €"),
+      el("div", "sub", lost[m.uid] + (lost[m.uid] === 1 ? " Tag" : " Tage"))
+    );
+    tr.append(
+      el("td", "nameCell", m.name + (m.uid === me ? " (du)" : "")),
+      debt,
+      el("td", "r num", sit[m.uid].toLocaleString("de-DE")),
+      el("td", "r num", push[m.uid].toLocaleString("de-DE"))
+    );
+    tbody.append(tr);
+  });
+  $("bilanzTable").replaceChildren(thead, tbody);
+
+  const MARK = { success: "✓", danger: "✕", skip: "S", pending: "·" };
   const grid = $("historyGrid");
   grid.style.setProperty("--n", members.length);
   const head = el("div", "hrow head");
@@ -580,12 +594,14 @@ function renderGroup() {
   const rows = [head];
   for (let i = 0; i < 14; i++) {
     const d = addDays(today, -i);
-    const row = el("div", "hrow");
+    const row = el("div", "hrow" + (i === 0 ? " today" : ""));
     row.append(el("div", "hdate num", formatDate(d)));
     members.forEach((m) => {
       const s = statusFor(G, m.uid, d);
       const cell = el("div", "hcell");
-      cell.append(el("span", "dot " + s.cls), s.label);
+      const mark = el("i", "mark " + s.cls, MARK[s.cls]);
+      mark.title = s.label;
+      cell.append(mark);
       row.append(cell);
     });
     rows.push(row);
@@ -752,6 +768,7 @@ function wire() {
   $("situpsInput").addEventListener("input", updateBars);
   $("pushupsInput").addEventListener("input", updateBars);
   $("saveBtn").addEventListener("click", saveEntry);
+  document.querySelectorAll(".tabbar button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
 
   $("copyCode").addEventListener("click", async () => {
     if (!S.g) return;
