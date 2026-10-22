@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sweat or Pay</title>
+<meta name="theme-color" content="#131110">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sweat or Pay">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <div id="gate" class="gate" hidden>
+    <div class="kicker" id="gateKicker"></div>
+    <h1>Sweat <em>or</em> Pay</h1>
+    <p>Wer bist du?</p>
+    <div id="gateButtons"></div>
+  </div>
+
+  <div id="main" hidden>
+    <div class="topbar">
+      <div class="brand">Sweat <em>or</em> Pay</div>
+      <div class="whoBadge" id="whoBadge">—</div>
+    </div>
+
+    <div class="banner" id="demoBanner" hidden>Demo-Modus: Die Daten bleiben nur auf diesem Gerät. Trage die Firebase-Konfiguration in <code>config.js</code> ein, damit ihr gemeinsam eintragen könnt.</div>
+    <div class="banner err" id="connBanner" hidden></div>
+
+    <section class="card hero">
+      <div class="hero-head">
+        <input type="date" id="dateInput" aria-label="Datum">
+        <span class="hero-goal" id="heroGoal"></span>
+      </div>
+
+      <div class="exercise">
+        <label for="situpsInput">Sit-ups</label>
+        <div class="stepper">
+          <button type="button" data-target="situps" data-delta="-5" aria-label="5 weniger">−5</button>
+          <input type="number" id="situpsInput" inputmode="numeric" min="0" max="2000" value="0">
+          <button type="button" data-target="situps" data-delta="5" aria-label="5 mehr">+5</button>
+        </div>
+        <div class="bar"><div class="bar-fill" id="situpsBar"></div></div>
+      </div>
+
+      <div class="exercise">
+        <label for="pushupsInput">Liegestütze</label>
+        <div class="stepper">
+          <button type="button" data-target="pushups" data-delta="-5" aria-label="5 weniger">−5</button>
+          <input type="number" id="pushupsInput" inputmode="numeric" min="0" max="2000" value="0">
+          <button type="button" data-target="pushups" data-delta="5" aria-label="5 mehr">+5</button>
+        </div>
+        <div class="bar"><div class="bar-fill" id="pushupsBar"></div></div>
+      </div>
+
+      <label class="skipRow">
+        <input type="checkbox" id="skipInput">
+        <span>Skip-Tag für diese Woche nutzen</span>
+      </label>
+      <div class="note" id="skipNote" hidden></div>
+
+      <button class="saveBtn" id="saveBtn" type="button">Speichern</button>
+      <div class="feedback" id="saveFeedback" hidden></div>
+    </section>
+
+    <section class="statusRow" id="statusRow"></section>
+
+    <section class="card block">
+      <h2>Schulden</h2>
+      <div class="totalsRow" id="debtRow"></div>
+    </section>
+
+    <section class="card block">
+      <h2>Gesamt seit Start</h2>
+      <div class="totalsRow" id="totalsRow"></div>
+    </section>
+
+    <section class="card history">
+      <h2>Letzte 14 Tage</h2>
+      <div class="historyGrid" id="historyGrid"></div>
+    </section>
+
+    <div class="rules" id="rules"></div>
+
+    <div class="footer">
+      <button class="link" id="switchWho" type="button">Nicht du? Person wechseln</button>
+    </div>
+  </div>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

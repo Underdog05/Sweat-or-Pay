@@ -1,0 +1,18 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /entries/{entryId} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasOnly(['who', 'date', 'situps', 'pushups', 'skipped', 'updatedAt'])
+        && request.resource.data.who is string
+        && request.resource.data.date is string
+        && request.resource.data.situps is int
+        && request.resource.data.situps >= 0 && request.resource.data.situps <= 2000
+        && request.resource.data.pushups is int
+        && request.resource.data.pushups >= 0 && request.resource.data.pushups <= 2000
+        && request.resource.data.skipped is bool
+        && request.resource.data.updatedAt is string;
+      allow delete: if false;
+    }
+  }
+}
