@@ -1,4 +1,4 @@
-const CACHE = "sweat-or-pay-v1";
+const CACHE = "sweat-or-pay-v2";
 const SHELL = ["./", "./index.html", "./style.css", "./app.js", "./config.js", "./manifest.webmanifest", "./icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
@@ -15,7 +15,22 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
+  if (req.method !== "GET") return;
+  const url = new URL(req.url);
+
+  // Firebase-Bibliothek (fest versioniert): einmal laden, danach aus dem Cache.
+  if (url.origin === "https://www.gstatic.com" && url.pathname.startsWith("/firebasejs/")) {
+    event.respondWith(
+      caches.match(req).then((hit) => hit || fetch(req).then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy));
+        return res;
+      }))
+    );
+    return;
+  }
+
+  if (url.origin !== self.location.origin) return;
   event.respondWith(
     fetch(req)
       .then((res) => {

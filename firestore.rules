@@ -1,18 +1,118 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /entries/{entryId} {
-      allow read: if true;
-      allow create, update: if request.resource.data.keys().hasOnly(['who', 'date', 'situps', 'pushups', 'skipped', 'updatedAt'])
-        && request.resource.data.who is string
-        && request.resource.data.date is string
-        && request.resource.data.situps is int
-        && request.resource.data.situps >= 0 && request.resource.data.situps <= 2000
-        && request.resource.data.pushups is int
-        && request.resource.data.pushups >= 0 && request.resource.data.pushups <= 2000
-        && request.resource.data.skipped is bool
-        && request.resource.data.updatedAt is string;
-      allow delete: if false;
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // App-Admin: Dokument admins/{uid} wird nur manuell in der Firebase-Konsole angelegt.
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function groupPath(gid) {
+      return /databases/$(database)/documents/groups/$(gid);
+    }
+
+    function isMember(gid) {
+      return signedIn() && exists(/databases/$(database)/documents/groups/$(gid)/members/$(request.auth.uid));
+    }
+
+    function isGroupAdmin(gid) {
+      return signedIn() && get(groupPath(gid)).data.adminUid == request.auth.uid;
+    }
+
+    function validGroup(d) {
+      return d.keys().hasOnly(['name', 'code', 'adminUid', 'situps', 'pushups', 'penalty', 'createdAt'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 40
+        && d.code is string && d.code.matches('^[A-Z0-9]{6}$')
+        && d.adminUid is string
+        && d.situps is int && d.situps >= 1 && d.situps <= 2000
+        && d.pushups is int && d.pushups >= 1 && d.pushups <= 2000
+        && d.penalty is int && d.penalty >= 0 && d.penalty <= 1000
+        && d.createdAt is string;
+    }
+
+    function validEntry(d, entryId) {
+      return d.keys().hasOnly(['uid', 'date', 'situps', 'pushups', 'skipped', 'updatedAt'])
+        && d.uid == request.auth.uid
+        && d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && entryId == d.date + '_' + d.uid
+        && d.situps is int && d.situps >= 0 && d.situps <= 2000
+        && d.pushups is int && d.pushups >= 0 && d.pushups <= 2000
+        && d.skipped is bool
+        && d.updatedAt is string;
+    }
+
+    match /admins/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'createdAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 30
+        && request.resource.data.createdAt is string;
+
+      match /groups/{gid} {
+        allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+        allow create: if signedIn() && request.auth.uid == uid
+          && isMember(gid)
+          && request.resource.data.keys().hasOnly(['joinedAt'])
+          && request.resource.data.joinedAt is string;
+        allow delete: if signedIn() && (request.auth.uid == uid || isAdmin() || isGroupAdmin(gid));
+      }
+    }
+
+    // Beitrittscodes: nur gezieltes Abrufen mit bekanntem Code, kein Auflisten.
+    match /groupCodes/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && code.matches('^[A-Z0-9]{6}$')
+        && request.resource.data.keys().hasOnly(['groupId'])
+        && request.resource.data.groupId is string
+        && get(groupPath(request.resource.data.groupId)).data.adminUid == request.auth.uid;
+      allow update: if false;
+      allow delete: if signedIn()
+        && (isAdmin() || get(groupPath(resource.data.groupId)).data.adminUid == request.auth.uid);
+    }
+
+    match /groups/{gid} {
+      allow get: if isMember(gid) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if signedIn()
+        && validGroup(request.resource.data)
+        && request.resource.data.adminUid == request.auth.uid;
+      allow update: if signedIn()
+        && validGroup(request.resource.data)
+        && request.resource.data.adminUid == resource.data.adminUid
+        && (resource.data.adminUid == request.auth.uid || isAdmin());
+      allow delete: if signedIn()
+        && (resource.data.adminUid == request.auth.uid || isAdmin());
+
+      match /members/{uid} {
+        allow read: if isMember(gid) || isAdmin();
+        allow create: if signedIn() && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['name', 'code', 'joinedAt'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 30
+          && request.resource.data.code is string
+          && request.resource.data.joinedAt is string
+          && exists(groupPath(gid))
+          && get(groupPath(gid)).data.code == request.resource.data.code;
+        allow delete: if signedIn() && (request.auth.uid == uid || isAdmin() || isGroupAdmin(gid));
+      }
+
+      match /entries/{entryId} {
+        allow read: if isMember(gid) || isAdmin();
+        allow create, update: if isMember(gid) && validEntry(request.resource.data, entryId);
+        allow delete: if signedIn() && (isGroupAdmin(gid) || isAdmin());
+      }
     }
   }
 }

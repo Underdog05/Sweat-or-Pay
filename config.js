@@ -1,15 +1,8 @@
-// Hier kannst du Namen, Ziele und Strafe anpassen.
-// "id" nur Kleinbuchstaben/Zahlen, ohne Leerzeichen, und nach dem Start nicht mehr ändern.
+// Standardwerte für neue Gruppen (der Gruppen-Admin kann sie beim Erstellen ändern).
 export const CONFIG = {
-  players: [
-    { id: "devin", name: "Devin" },
-    { id: "henrik", name: "Henrik" },
-  ],
-  goals: { situps: 100, pushups: 50 },
-  penalty: 5, // Euro pro verlorenem Tag
+  defaults: { situps: 100, pushups: 50, penalty: 5 },
 
-  // Firebase-Konfiguration: aus der Firebase-Konsole kopieren (Projekteinstellungen > Web-App).
-  // Solange hier "HIER_EINTRAGEN" steht, läuft die App im Demo-Modus (Daten nur auf diesem Gerät).
+  // Firebase-Konfiguration aus der Firebase-Konsole (Projekteinstellungen > Web-App).
   firebase: {
     apiKey: "AIzaSyCm7waXvtXVxm8TuVLzWeEyYVrq6tMaBjo",
     authDomain: "er-f8786.firebaseapp.com",

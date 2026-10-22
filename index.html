@@ -18,23 +18,86 @@
 </head>
 <body>
 <div id="app">
-  <div id="gate" class="gate" hidden>
-    <div class="kicker" id="gateKicker"></div>
-    <h1>Sweat <em>or</em> Pay</h1>
-    <p>Wer bist du?</p>
-    <div id="gateButtons"></div>
-  </div>
 
-  <div id="main" hidden>
-    <div class="topbar">
-      <div class="brand">Sweat <em>or</em> Pay</div>
-      <div class="whoBadge" id="whoBadge">—</div>
+  <header class="topbar" id="topbar" hidden>
+    <a class="brand" href="#">Sweat <em>or</em> Pay</a>
+    <div class="whoBadge" id="whoBadge">—</div>
+  </header>
+  <div class="banner" id="banner" hidden></div>
+
+  <!-- ===== Anmeldung ===== -->
+  <section id="viewAuth" hidden>
+    <div class="gate">
+      <div class="kicker">Gemeinsam fit bleiben, sonst zahlen</div>
+      <h1>Sweat <em>or</em> Pay</h1>
+    </div>
+    <div class="card">
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab active" id="tabLogin" role="tab">Anmelden</button>
+        <button type="button" class="tab" id="tabRegister" role="tab">Registrieren</button>
+      </div>
+      <form id="authForm" novalidate>
+        <label class="field" id="nameField" hidden>
+          <span>Dein Name (so sehen dich die anderen)</span>
+          <input id="authName" type="text" maxlength="30" autocomplete="nickname">
+        </label>
+        <label class="field">
+          <span>E-Mail</span>
+          <input id="authEmail" type="email" inputmode="email" autocomplete="email">
+        </label>
+        <label class="field">
+          <span>Passwort (mindestens 6 Zeichen)</span>
+          <input id="authPass" type="password" autocomplete="current-password">
+        </label>
+        <div class="feedback err" id="authMsg" hidden></div>
+        <button class="saveBtn" id="authSubmit" type="submit">Anmelden</button>
+        <div class="center"><button class="link" id="forgotBtn" type="button">Passwort vergessen?</button></div>
+      </form>
+    </div>
+  </section>
+
+  <!-- ===== Meine Gruppen ===== -->
+  <section id="viewHome" hidden>
+    <h2 class="pageTitle">Meine Gruppen</h2>
+    <div class="list" id="groupList"></div>
+    <p class="empty" id="groupEmpty" hidden>Du bist noch in keiner Gruppe. Tritt mit einem Code bei oder erstelle eine eigene Gruppe.</p>
+
+    <div class="card">
+      <h3 class="cardTitle">Gruppe beitreten</h3>
+      <form id="joinForm" class="inline" novalidate>
+        <input id="joinCode" type="text" maxlength="6" placeholder="Gruppencode" autocapitalize="characters" autocomplete="off" aria-label="Gruppencode">
+        <button class="saveBtn" type="submit" id="joinBtn">Beitreten</button>
+      </form>
+      <div class="feedback err" id="joinMsg" hidden></div>
     </div>
 
-    <div class="banner" id="demoBanner" hidden>Demo-Modus: Die Daten bleiben nur auf diesem Gerät. Trage die Firebase-Konfiguration in <code>config.js</code> ein, damit ihr gemeinsam eintragen könnt.</div>
-    <div class="banner err" id="connBanner" hidden></div>
+    <details class="card" id="createDetails">
+      <summary>Neue Gruppe erstellen</summary>
+      <form id="createForm" novalidate>
+        <label class="field"><span>Gruppenname</span><input id="createName" type="text" maxlength="40" placeholder="z. B. Die Sportskanonen"></label>
+        <div class="threeCols">
+          <label class="field"><span>Sit-ups</span><input id="createSitups" type="number" inputmode="numeric" min="1" max="2000"></label>
+          <label class="field"><span>Liegestütze</span><input id="createPushups" type="number" inputmode="numeric" min="1" max="2000"></label>
+          <label class="field"><span>Strafe (€)</span><input id="createPenalty" type="number" inputmode="numeric" min="0" max="1000"></label>
+        </div>
+        <div class="feedback err" id="createMsg" hidden></div>
+        <button class="saveBtn" type="submit" id="createBtn">Gruppe erstellen</button>
+      </form>
+    </details>
 
-    <section class="card hero">
+    <button class="secondary" id="adminBtn" type="button" hidden>Admin-Bereich</button>
+    <div class="footer"><button class="link" id="logoutBtn" type="button">Abmelden</button></div>
+  </section>
+
+  <!-- ===== Gruppe ===== -->
+  <section id="viewGroup" hidden>
+    <div class="groupHead">
+      <a class="backLink" href="#">← Meine Gruppen</a>
+      <h2 class="pageTitle" id="groupName">…</h2>
+      <span class="badge" id="roleBadge" hidden></span>
+    </div>
+
+    <section class="card hero" id="entryCard">
       <div class="hero-head">
         <input type="date" id="dateInput" aria-label="Datum">
         <span class="hero-goal" id="heroGoal"></span>
@@ -84,15 +147,56 @@
 
     <section class="card history">
       <h2>Letzte 14 Tage</h2>
-      <div class="historyGrid" id="historyGrid"></div>
+      <div class="scrollX"><div class="historyGrid" id="historyGrid"></div></div>
     </section>
 
-    <div class="rules" id="rules"></div>
+    <section class="card block" id="infoCard">
+      <h2>Gruppe</h2>
+      <div class="codeBox">
+        <div>
+          <div class="totalsLabel">Gruppencode zum Einladen</div>
+          <div class="codeValue num" id="codeValue">——</div>
+        </div>
+        <div class="codeActions">
+          <button class="secondary small" id="copyCode" type="button">Kopieren</button>
+          <button class="secondary small" id="shareCode" type="button" hidden>Teilen</button>
+        </div>
+      </div>
+      <div class="memberList" id="memberList"></div>
+      <div class="rules" id="rules"></div>
 
-    <div class="footer">
-      <button class="link" id="switchWho" type="button">Nicht du? Person wechseln</button>
+      <details class="adminTools" id="adminTools" hidden>
+        <summary>Gruppe verwalten</summary>
+        <form id="editForm" novalidate>
+          <label class="field"><span>Gruppenname</span><input id="editName" type="text" maxlength="40"></label>
+          <div class="threeCols">
+            <label class="field"><span>Sit-ups</span><input id="editSitups" type="number" inputmode="numeric" min="1" max="2000"></label>
+            <label class="field"><span>Liegestütze</span><input id="editPushups" type="number" inputmode="numeric" min="1" max="2000"></label>
+            <label class="field"><span>Strafe (€)</span><input id="editPenalty" type="number" inputmode="numeric" min="0" max="1000"></label>
+          </div>
+          <div class="feedback" id="editMsg" hidden></div>
+          <button class="saveBtn" type="submit">Änderungen speichern</button>
+        </form>
+        <div class="adminActions">
+          <button class="secondary" id="newCodeBtn" type="button">Neuen Code erzeugen</button>
+          <button class="danger" id="deleteGroupBtn" type="button">Gruppe löschen</button>
+        </div>
+      </details>
+
+      <button class="link" id="leaveBtn" type="button" hidden>Gruppe verlassen</button>
+    </section>
+  </section>
+
+  <!-- ===== Admin ===== -->
+  <section id="viewAdmin" hidden>
+    <div class="groupHead">
+      <a class="backLink" href="#">← Meine Gruppen</a>
+      <h2 class="pageTitle">Admin: alle Gruppen</h2>
     </div>
-  </div>
+    <div class="list" id="adminList"></div>
+    <p class="empty" id="adminEmpty" hidden>Es gibt noch keine Gruppen.</p>
+  </section>
+
 </div>
 <script type="module" src="app.js"></script>
 </body>
