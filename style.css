@@ -215,11 +215,13 @@ table.bilanz{ width:100%; border-collapse:collapse; font-size:14px; }
 .myRank{ padding:14px 0; border-top:1px solid var(--border); }
 .myRank:first-child{ border-top:none; padding-top:0; }
 .myRank:last-child{ padding-bottom:0; }
-.myRankTop{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+.rimg{ width:var(--s,40px); height:var(--s,40px); flex:none; border-radius:50%; object-fit:cover; background:#0a1120; }
+.myRankHead{ display:flex; align-items:center; gap:14px; margin-bottom:12px; }
+.myRankInfo{ flex:1; min-width:0; }
+.myRankTop{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; flex-wrap:wrap; }
 .myRankTop .exName{ font-size:14px; font-weight:600; }
-.myRankMid{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:6px; }
-.myRankTotal{ font-family:"Anton",sans-serif; font-size:30px; line-height:1; }
-.myRankNext{ font-size:12px; color:var(--text-dim); text-align:right; }
+.myRankTotal{ font-family:"Anton",sans-serif; font-size:30px; line-height:1.1; }
+.myRankNext{ font-size:12px; color:var(--text-dim); margin-top:2px; }
 .bar-fill.rankfill{ background:var(--accent); }
 .bar-fill.rankfill.hi{ background:var(--gold); }
 
@@ -244,9 +246,9 @@ table.bilanz{ width:100%; border-collapse:collapse; font-size:14px; }
 .hint{ font-size:12px; color:var(--text-dim); margin:12px 0 0; line-height:1.5; }
 
 .ladder{ display:flex; flex-direction:column; }
-.lrow{ display:grid; grid-template-columns:auto 1fr; gap:4px 12px; align-items:center; padding:10px 0; border-top:1px solid var(--border); }
+.lrow{ display:flex; align-items:center; gap:14px; padding:10px 0; border-top:1px solid var(--border); }
 .lrow:first-child{ border-top:none; padding-top:0; }
-.lrow .need{ grid-column:1 / -1; font-size:12px; color:var(--text-dim); }
+.lrowText .need{ font-size:12px; color:var(--text-dim); margin-top:4px; }
 
 /* ---------- Tab: Gruppe ---------- */
 .codeBox{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:14px 16px; background:var(--surface-2); border-radius:14px; margin-bottom:14px; }

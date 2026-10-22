@@ -487,33 +487,47 @@ const PANES = { today: "paneToday", rang: "paneRang", bilanz: "paneBilanz", verl
 
 /* ---------- Ränge ---------- */
 
-// Ränge richten sich nach der Zahl voller Tage (Tagesziel der Gruppe × Tage), für Sit-ups und Liegestütze getrennt.
+// Ränge zählen alle jemals eingetragenen Wiederholungen, für Sit-ups und Liegestütze getrennt (max. 100.000).
 const RANKS = [
-  { name: "Rookie", days: 0 },
-  { name: "Kämpfer", days: 5 },
-  { name: "Athlet", days: 15 },
-  { name: "Krieger", days: 30 },
-  { name: "Veteran", days: 50 },
-  { name: "Champion", days: 100 },
-  { name: "Master", days: 200 },
-  { name: "Grandmaster", days: 300 },
-  { name: "Legende", days: 365 },
+  { name: "Rookie", min: 0 },
+  { name: "Kämpfer", min: 500 },
+  { name: "Athlet", min: 1500 },
+  { name: "Krieger", min: 3500 },
+  { name: "Veteran", min: 7000 },
+  { name: "Elite", min: 12000 },
+  { name: "Champion", min: 20000 },
+  { name: "Master", min: 30000 },
+  { name: "Grandmaster", min: 45000 },
+  { name: "Titan", min: 62000 },
+  { name: "Legende", min: 80000 },
+  { name: "Mythos", min: 100000 },
 ];
 const HIGH_LEVEL = 7;
 const nf = (n) => n.toLocaleString("de-DE");
 
-function rankFor(total, daily) {
+function rankFor(total) {
   let i = 0;
-  RANKS.forEach((r, k) => { if (total >= r.days * daily) i = k; });
+  RANKS.forEach((r, k) => { if (total >= r.min) i = k; });
   const next = RANKS[i + 1];
   return {
-    level: i + 1, name: RANKS[i].name, base: RANKS[i].days * daily,
-    next: next ? { name: next.name, need: next.days * daily } : null,
+    level: i + 1, name: RANKS[i].name, base: RANKS[i].min,
+    next: next ? { name: next.name, need: next.min } : null,
   };
 }
 
 function rankChip(r) {
   return el("span", "rk" + (r.level >= HIGH_LEVEL ? " hi" : ""), "Lv " + r.level + " · " + r.name);
+}
+
+function rankImg(level, size) {
+  const img = el("img", "rimg");
+  img.src = "ranks/" + level + ".jpg";
+  img.alt = "Rang " + level;
+  img.width = size;
+  img.height = size;
+  img.loading = "lazy";
+  img.style.setProperty("--s", size + "px");
+  return img;
 }
 
 function currentStreak(G, uid, today) {
@@ -541,7 +555,7 @@ const METRICS = {
 function renderBoard() {
   const G = S.g;
   if (!G || !G.stats) return;
-  const grp = G.group, me = S.user.uid;
+  const me = S.user.uid;
   const metric = G.metric || "situps";
   const cfg = METRICS[metric];
   const val = (m) => G.stats[m.uid][cfg.key];
@@ -553,52 +567,55 @@ function renderBoard() {
     const row = el("div", "brow" + (m.uid === me ? " me" : ""));
     const main = el("div", "bmain");
     main.append(el("div", "bname", m.name + (m.uid === me ? " (du)" : "")));
-    if (metric === "situps") main.append(rankChip(rankFor(v, grp.situps)));
-    if (metric === "pushups") main.append(rankChip(rankFor(v, grp.pushups)));
+    const rk = metric === "situps" || metric === "pushups" ? rankFor(v) : null;
+    if (rk) main.append(rankChip(rk));
     const unit = cfg.unit ? (v === 1 ? " Tag" : " Tage") : "";
-    row.append(el("div", "pos" + (pos <= 3 && v > 0 ? " p" + pos : ""), String(pos)), main, el("div", "bval num", nf(v) + unit));
+    row.append(el("div", "pos" + (pos <= 3 && v > 0 ? " p" + pos : ""), String(pos)));
+    if (rk) row.append(rankImg(rk.level, 40));
+    row.append(main, el("div", "bval num", nf(v) + unit));
     return row;
   }));
   $("boardHint").textContent = cfg.hint;
 }
 
 function renderRanks(isMember) {
-  const G = S.g, grp = G.group, me = S.user.uid;
+  const G = S.g;
+  const me = S.user.uid;
   $("myRankCard").hidden = !isMember;
   if (isMember) {
     const mine = G.stats[me] || { sit: 0, push: 0 };
-    const blocks = [["Sit-ups", mine.sit, grp.situps], ["Liegestütze", mine.push, grp.pushups]].map(([label, total, daily]) => {
-      const r = rankFor(total, daily);
+    const blocks = [["Sit-ups", mine.sit], ["Liegestütze", mine.push]].map(([label, total]) => {
+      const r = rankFor(total);
       const box = el("div", "myRank");
+      const head = el("div", "myRankHead");
+      const info = el("div", "myRankInfo");
       const top = el("div", "myRankTop");
       top.append(el("span", "exName", label), rankChip(r));
-      const mid = el("div", "myRankMid");
-      mid.append(
+      info.append(
+        top,
         el("div", "myRankTotal num", nf(total)),
         el("div", "myRankNext", r.next ? "noch " + nf(r.next.need - total) + " bis " + r.next.name : "Höchster Rang erreicht")
       );
+      head.append(rankImg(r.level, 72), info);
       const bar = el("div", "bar");
       const fill = el("div", "bar-fill rankfill" + (r.level >= HIGH_LEVEL ? " hi" : ""));
       fill.style.width = (r.next ? Math.min(100, ((total - r.base) / (r.next.need - r.base)) * 100) : 100) + "%";
       bar.append(fill);
-      box.append(top, mid, bar);
+      box.append(head, bar);
       return box;
     });
     $("myRanks").replaceChildren(...blocks);
   }
   $("ladder").replaceChildren(...RANKS.map((r, i) => {
     const row = el("div", "lrow");
-    row.append(
-      rankChip({ level: i + 1, name: r.name }),
-      el("span", "", ""),
-      el("div", "need", r.days === 0
-        ? "Startrang"
-        : nf(r.days * grp.situps) + " Sit-ups · " + nf(r.days * grp.pushups) + " Liegestütze (" + r.days + " volle Tage)")
-    );
+    const txt = el("div", "lrowText");
+    txt.append(rankChip({ level: i + 1, name: r.name }), el("div", "need", r.min === 0 ? "Startrang" : "ab " + nf(r.min) + " Wiederholungen"));
+    row.append(rankImg(i + 1, 48), txt);
     return row;
   }));
   renderBoard();
 }
+
 function setTab(tab) {
   if (S.g) S.g.tab = tab;
   Object.keys(PANES).forEach((t) => { $(PANES[t]).hidden = t !== tab; });
