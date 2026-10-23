@@ -1620,6 +1620,60 @@ function updateSkip() {
   }
 }
 
+/* ---------- Bilanz: Kreisstatistik "Gezahlt" ---------- */
+
+const PAY_COLORS = ["#ff7a45", "#36d6c4", "#ffc857", "#9a8cff", "#6fcf97", "#ff6f91", "#5aa9ff", "#c9a45c"];
+
+function renderPayChart(members, lost, grp) {
+  const G = S.g;
+  const order = [...G.members].map((m) => m.uid).sort();
+  const rows = members
+    .map((m) => ({ m, color: PAY_COLORS[order.indexOf(m.uid) % PAY_COLORS.length], amount: lost[m.uid] * grp.penalty }))
+    .sort((a, b) => b.amount - a.amount || a.m.name.localeCompare(b.m.name, "de"));
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  const sig = total + "|" + rows.map((r) => r.m.uid + ":" + r.amount + ":" + r.m.name).join(",");
+  if (G.paySig === sig) return;
+  G.paySig = sig;
+
+  const R = 42, C = 2 * Math.PI * R;
+  const svg = $("payDonut");
+  const mk = (cls, stroke) => {
+    const c = document.createElementNS(SVG_NS, "circle");
+    c.setAttribute("class", cls);
+    c.setAttribute("cx", "60"); c.setAttribute("cy", "60"); c.setAttribute("r", String(R));
+    if (stroke) c.setAttribute("stroke", stroke);
+    return c;
+  };
+  const parts = [mk("donutTrack")];
+  const paying = rows.filter((r) => r.amount > 0);
+  const gap = paying.length > 1 ? 2.2 : 0;
+  let cum = 0;
+  paying.forEach((r, i) => {
+    const len = Math.max(0.6, (r.amount / total) * C - gap);
+    const seg = mk("donutSeg", r.color);
+    seg.style.setProperty("--len", len.toFixed(2));
+    seg.style.setProperty("--c", C.toFixed(2));
+    seg.style.animationDelay = (i * 70) + "ms";
+    seg.setAttribute("stroke-dasharray", len.toFixed(2) + " " + (C - len).toFixed(2));
+    seg.setAttribute("stroke-dashoffset", (-cum).toFixed(2));
+    cum += (r.amount / total) * C;
+    parts.push(seg);
+  });
+  svg.replaceChildren(...parts);
+
+  $("payTotal").textContent = nf(total) + " €";
+  $("paySub").textContent = total > 0 ? "gesamt gezahlt" : "noch nichts gezahlt";
+  $("payLegend").replaceChildren(...rows.map((r) => {
+    const li = el("div", "payRow" + (r.amount === 0 ? " zero" : ""));
+    const dot = el("i", "payDot");
+    dot.style.background = r.color;
+    const name = el("span", "payName", r.m.name + (r.m.uid === S.user.uid ? " (du)" : ""));
+    const val = el("b", "num", nf(r.amount) + " €");
+    li.append(dot, name, val, el("small", "", total > 0 ? Math.round((r.amount / total) * 100) + " %" : "–"));
+    return li;
+  }));
+}
+
 /* ---------- Team: Tagesübersicht und Personenansicht ---------- */
 
 const HISTORY_DAYS = 30;
@@ -1734,7 +1788,7 @@ function renderPlayer(m) {
     [am.best, "Beste Serie", ""],
     [st.done, "Geschafft", "ok"],
     [lost, "Verloren", lost > 0 ? "bad" : ""],
-    [lost * grp.penalty + " €", "Schulden", lost > 0 ? "bad" : "ok"],
+    [lost * grp.penalty + " €", "Gezahlt", lost > 0 ? "bad" : "ok"],
     [skips, "Skip-Tage", ""],
   ].forEach(([v, label, cls]) => {
     const t = el("div", "statTile" + (cls ? " " + cls : ""));
@@ -1838,7 +1892,7 @@ function renderGroup() {
 
   const thead = el("thead");
   const headRow = el("tr");
-  ["Mitglied", "Schulden", "Sit-ups", "Liegestütze"].forEach((t, i) => headRow.append(el("th", i ? "r" : "", t)));
+  ["Mitglied", "Gezahlt", "Sit-ups", "Liegestütze"].forEach((t, i) => headRow.append(el("th", i ? "r" : "", t)));
   thead.append(headRow);
   const tbody = el("tbody");
   members.forEach((m) => {
@@ -1858,6 +1912,7 @@ function renderGroup() {
     tbody.append(tr);
   });
   $("bilanzTable").replaceChildren(thead, tbody);
+  renderPayChart(members, lost, grp);
 
   const stats = {};
   members.forEach((m) => { stats[m.uid] = { sit: sit[m.uid], push: push[m.uid], done: 0, streak: currentStreak(G, m.uid, today) }; });

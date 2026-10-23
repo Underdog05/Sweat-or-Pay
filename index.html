@@ -319,8 +319,19 @@
       </div>
 
       <div id="secBilanz">
+        <section class="card" id="payCard">
+          <h2 class="cardTitle">Wer hat wie viel gezahlt</h2>
+          <div class="payChart">
+            <div class="donutBox">
+              <svg id="payDonut" viewBox="0 0 120 120" role="img" aria-label="Anteile am gezahlten Betrag"></svg>
+              <div class="donutCenter"><b class="num" id="payTotal">0 €</b><span id="paySub">gezahlt</span></div>
+            </div>
+            <div class="payLegend" id="payLegend"></div>
+          </div>
+        </section>
+
         <section class="card">
-          <h2 class="cardTitle">Schulden und Gesamtzahlen</h2>
+          <h2 class="cardTitle">Gesamtzahlen</h2>
           <div class="scrollX"><table class="bilanz" id="bilanzTable"></table></div>
         </section>
       </div>

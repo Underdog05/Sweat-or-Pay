@@ -323,3 +323,22 @@ button.primary.isBusy, .saveBar button.isBusy{ --spin:var(--cta-text); }
 .reactWrap .reacts{ margin:9px 0 0; }
 .reactWrap .picker{ margin:9px 0 0; }
 .tightHint{ margin:-6px 0 12px; }
+
+/* ---------- Bilanz: Kreisstatistik ---------- */
+.payChart{ display:flex; flex-wrap:wrap; align-items:center; gap:18px 22px; }
+.donutBox{ position:relative; width:150px; height:150px; flex:none; margin:0 auto; }
+.donutBox svg{ width:100%; height:100%; transform:rotate(-90deg); overflow:visible; }
+.donutTrack{ fill:none; stroke:var(--border); stroke-width:13; }
+.donutSeg{ fill:none; stroke-width:13; stroke-linecap:butt; filter:drop-shadow(0 0 4px rgba(0,0,0,.25)); animation:donutIn .9s cubic-bezier(.2,.8,.3,1) both; }
+@keyframes donutIn{ from{ stroke-dasharray:0 var(--c); opacity:.4; } }
+.donutCenter{ position:absolute; inset:0; display:grid; place-content:center; text-align:center; }
+.donutCenter b{ font:700 30px/1 "Barlow Condensed",sans-serif; letter-spacing:.01em; }
+.donutCenter span{ margin-top:4px; font:600 10px "Barlow Condensed",sans-serif; letter-spacing:.14em; text-transform:uppercase; color:var(--text-dim); }
+.payLegend{ flex:1; min-width:150px; display:flex; flex-direction:column; gap:9px; }
+.payRow{ display:flex; align-items:center; gap:9px; font-size:15px; }
+.payRow.zero{ opacity:.55; }
+.payDot{ width:10px; height:10px; border-radius:3px; flex:none; box-shadow:0 0 8px currentColor; }
+.payName{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500; }
+.payRow b{ font:700 18px "Barlow Condensed",sans-serif; }
+.payRow small{ width:38px; text-align:right; font-size:12px; color:var(--text-dim); }
+@media (prefers-reduced-motion: reduce){ .donutSeg{ animation:none; } }
