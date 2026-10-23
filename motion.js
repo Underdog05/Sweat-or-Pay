@@ -119,6 +119,7 @@
   });
 
   /* ---------- Tab-Leiste: Anzeige gleitet zum aktiven Reiter ---------- */
+  var TAB_COLORS = ["var(--c-sit)", "var(--c-push)", "#ffc857", "var(--c-violet)", "var(--c-sage)"];
   function syncTabbar() {
     var inner = document.querySelector(".tabbarInner");
     if (!inner) return;
@@ -127,6 +128,7 @@
     btns.forEach(function (b, i) { if (b.classList.contains("active")) idx = i; });
     inner.style.setProperty("--n", btns.length);
     inner.style.setProperty("--i", idx);
+    inner.style.setProperty("--tc", TAB_COLORS[idx % TAB_COLORS.length]);
   }
 
   /* ---------- Buttons: während einer Anfrage "disabled" => Ladekreis ---------- */
