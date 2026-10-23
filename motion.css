@@ -249,3 +249,15 @@ button.primary.isBusy, .saveBar button.isBusy{ --spin:var(--cta-text); }
 .gate::after{ content:""; position:absolute; inset:0; background:radial-gradient(60% 80% at 80% 20%, rgba(255,122,69,.22), transparent 70%); pointer-events:none; }
 
 @media (prefers-reduced-motion: reduce){ .flameIcon{ animation:none; } }
+
+/* ---------- Tab-Leiste: ruhiger, gedämpfte Farben ---------- */
+:root{ --tab1:#b8663f; --tab2:#2f8f85; --tab3:#9a7424; --tab4:#6f63b8; --tab5:#3f8a5e; }
+@media (prefers-color-scheme: dark){
+  :root{ --tab1:#c98562; --tab2:#6fb3aa; --tab3:#c4a468; --tab4:#9a92cc; --tab5:#82b596; }
+}
+.tabbarInner{ --tc:var(--tab1); }
+.tabbarInner::after{ height:2px; background:linear-gradient(90deg, transparent, var(--tc) 30%, var(--tc) 70%, transparent); box-shadow:0 3px 9px 0 color-mix(in srgb, var(--tc) 45%, transparent); }
+.tabbarInner::before{ background:radial-gradient(ellipse 60% 100% at 50% 0, color-mix(in srgb, var(--tc) 13%, transparent), transparent 75%); }
+.tabbar button.active svg{ stroke:var(--tc); filter:none; }
+.tabbar button.active{ color:var(--text); }
+.tabbar{ box-shadow:0 -10px 24px -18px rgba(0,0,0,.45); }

@@ -86,7 +86,7 @@ let db = null;
 function show(view) {
   endSplash();
   ["viewAuth", "viewHome", "viewGroup", "viewAdmin"].forEach((v) => { $(v).hidden = v !== view; });
-  $("topbar").hidden = view === "viewAuth";
+  $("topbar").hidden = view === "viewAuth" || view === "viewGroup";
   if (S.view !== view) window.scrollTo(0, 0);
   S.view = view;
 }
