@@ -64,7 +64,7 @@ function hash(str) {
 
 export function defaultChar(uid) {
   const h = hash(String(uid || "x"));
-  const pick = (n, shift) => ((h >>> shift) ^ (h >>> (shift + 7))) % n;
+  const pick = (n, shift) => (((h >>> shift) ^ (h >>> (shift + 7))) >>> 0) % n;
   return { s: pick(RANGE.s, 0), e: pick(RANGE.e, 3), m: pick(RANGE.m, 5), h: pick(RANGE.h - 1, 8) , c: pick(RANGE.c, 11), o: pick(4, 14), k: pick(RANGE.k, 17), b: 0, a: [] };
 }
 

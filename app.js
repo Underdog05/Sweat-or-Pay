@@ -851,6 +851,20 @@ function applyHomeMode(hasGroups) {
   $("startBack").hidden = loading || !none || !f;
 }
 
+// Kleine Gesichter aller Mitglieder auf der Startseite
+function memberFaces(members) {
+  const me = S.user.uid, MAX = 8;
+  const sorted = [...members].sort((a, b) => (a.uid === me ? -1 : b.uid === me ? 1 : a.name.localeCompare(b.name, "de")));
+  const row = el("div", "gFaces");
+  sorted.slice(0, MAX).forEach((m) => {
+    const f = avatarEl({ ...m, char: m.char || "d=0" }, 30, m.uid === me);
+    f.title = m.name + (m.uid === me ? " (du)" : "");
+    row.append(f);
+  });
+  if (sorted.length > MAX) row.append(el("i", "gMore", "+" + (sorted.length - MAX)));
+  return row;
+}
+
 async function renderHome() {
   const token = ++homeToken;
   $("groupEmpty").hidden = true;
@@ -859,9 +873,14 @@ async function renderHome() {
     try {
       const s = await getDoc(doc(db, "groups", id));
       if (!s.exists()) return { id, stale: true };
-      let info = null;
-      try { info = await homeInfo(id, s.data()); } catch (e) { info = null; }
-      return { id, data: s.data(), info };
+      let info = null, members = [];
+      await Promise.all([
+        homeInfo(id, s.data()).then((v) => { info = v; }, () => {}),
+        getDocs(collection(db, "groups", id, "members")).then((ms) => {
+          members = ms.docs.map((d) => ({ uid: d.id, name: String(d.data().name || "?"), avatar: safeAvatar(d.data().avatar), char: safeChar(d.data().char) }));
+        }, () => {}),
+      ]);
+      return { id, data: s.data(), info, members };
     } catch (e) {
       return e.code === "permission-denied" ? { id, stale: true } : { id, offline: true };
     }
@@ -887,6 +906,7 @@ async function renderHome() {
     if (r.data) {
       mid.append(el("small", "", r.data.situps + " Sit-ups · " + r.data.pushups + " Liegestütze" + (r.data.adminUid === S.user.uid ? " · Admin" : "")));
     }
+    if (r.members && r.members.length) mid.append(memberFaces(r.members));
     a.append(img, mid);
     if (r.info) a.append(el("span", "pill " + r.info.status.cls, r.info.status.label));
     else a.append(el("span", "", "›"));

@@ -490,3 +490,10 @@ button.primary.isBusy, .saveBar button.isBusy{ --spin:var(--cta-text); }
 .charRow .pushTitle{ white-space:nowrap; }
 .charRow .secondary.small{ padding:8px 12px; }
 
+
+/* ---------- Startseite: Mitglieder als kleine Gesichter ---------- */
+.gFaces{ display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-top:9px; }
+.gFaces .avatar{ box-shadow:0 0 0 2px var(--surface); }
+.gFaces .avatar.me{ box-shadow:0 0 0 2px var(--surface), 0 0 0 3.5px var(--accent); }
+.gFaces .gMore{ height:30px; min-width:30px; padding:0 7px; display:inline-grid; place-items:center; border-radius:100px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-dim); font:700 13px "Barlow Condensed",sans-serif; font-style:normal; letter-spacing:.04em; }
+.listItem .gInfo .gFaces{ display:flex; }
