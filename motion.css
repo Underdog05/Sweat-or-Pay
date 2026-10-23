@@ -497,3 +497,12 @@ button.primary.isBusy, .saveBar button.isBusy{ --spin:var(--cta-text); }
 .gFaces .avatar.me{ box-shadow:0 0 0 2px var(--surface), 0 0 0 3.5px var(--accent); }
 .gFaces .gMore{ height:30px; min-width:30px; padding:0 7px; display:inline-grid; place-items:center; border-radius:100px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-dim); font:700 13px "Barlow Condensed",sans-serif; font-style:normal; letter-spacing:.04em; }
 .listItem .gInfo .gFaces{ display:flex; }
+
+/* ---------- Fenster: scrollbar, mit Schließen-Knopf oben ---------- */
+.modal{ overflow:hidden; }
+.sheet{ max-height:calc(100vh - 24px); max-height:calc(100dvh - 24px); overflow-y:auto; overscroll-behavior:contain; position:relative; }
+.sheetHead{ position:sticky; top:-20px; z-index:3; display:flex; align-items:center; justify-content:space-between; gap:12px; margin:-20px -20px 14px; padding:16px 14px 12px 20px; background:var(--surface); border-bottom:1px solid var(--border); }
+.sheetHead .cardTitle{ margin:0; }
+.sheetClose{ width:40px; height:40px; flex:none; display:grid; place-items:center; padding:0; border-radius:50%; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:16px; line-height:1; cursor:pointer; }
+.sheetClose:active{ background:var(--accent-soft); }
+.charSheet{ max-height:calc(100vh - 24px); max-height:calc(100dvh - 24px); }

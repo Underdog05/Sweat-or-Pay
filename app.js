@@ -2333,6 +2333,7 @@ function wire() {
   $("avatarFile").addEventListener("change", onAvatarPicked);
   $("avatarRemove").addEventListener("click", removeAvatar);
   wireChar();
+  document.querySelectorAll(".sheetClose").forEach((b) => b.addEventListener("click", () => { const m = b.closest(".modal"); if (m) m.hidden = true; }));
   $("pushToggle").addEventListener("click", togglePush);
   $("celClose").addEventListener("click", nextCelebration);
 
