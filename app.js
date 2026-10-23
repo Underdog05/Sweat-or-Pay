@@ -518,7 +518,9 @@ async function submitChar() {
     flash("Dein Charakter ist gespeichert.", "ok");
     if (window.SOPUI) window.SOPUI.haptic("success");
   } catch (err) {
-    setMsg($("charMsg"), "Das Speichern hat nicht geklappt. Prüfe deine Verbindung.");
+    setMsg($("charMsg"), err && err.code === "permission-denied"
+      ? "Firebase lehnt das Speichern ab. Die neuen Regeln (firestore.rules) müssen in Firebase unter Firestore Database → Regeln veröffentlicht werden."
+      : "Das Speichern hat nicht geklappt. Prüfe deine Verbindung.");
     if (window.SOPUI) window.SOPUI.fail(btn);
   } finally {
     btn.disabled = false;
