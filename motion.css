@@ -363,3 +363,59 @@ button.primary.isBusy, .saveBar button.isBusy{ --spin:var(--cta-text); }
 .podium{ border-bottom:1px solid var(--border); margin-bottom:6px; }
 .podium:not([hidden]) + .board{ margin-top:4px; }
 
+
+/* ---------- Charaktere ---------- */
+.chr{ display:block; overflow:visible; }
+.chr .chrFig{ animation:chrBob 5s ease-in-out infinite; transform-origin:60px 150px; }
+.chr .eyes{ animation:chrBlink 6s infinite; transform-origin:60px 54px; transform-box:view-box; }
+@keyframes chrBob{ 0%,100%{ transform:translateY(0) scale(1); } 50%{ transform:translateY(-1.6px) scale(1.012); } }
+@keyframes chrBlink{ 0%,93%,100%{ transform:scaleY(1); } 96%{ transform:scaleY(.1); } }
+.chrHead .chrFig, .chrHead .eyes{ animation:none; }
+.avatar.charFace{ background:radial-gradient(circle at 50% 35%, var(--surface-2), var(--surface)); }
+.avatar.charFace svg{ width:100%; height:100%; }
+
+.charRow{ display:flex; align-items:center; gap:14px; margin-top:16px; padding-top:16px; border-top:1px solid var(--border); }
+.charRow .secondary.small{ flex:none; }
+.charThumb{ width:64px; height:64px; flex:none; padding:0; border-radius:50%; border:1px solid var(--accent); background:radial-gradient(circle at 50% 35%, var(--surface-2), var(--surface)); overflow:hidden; cursor:pointer; }
+.charThumb svg{ width:100%; height:100%; }
+
+.charModal{ z-index:44; }
+.charSheet{ max-height:calc(100vh - 24px); overflow-y:auto; overscroll-behavior:contain; }
+.charStage{ position:relative; display:grid; place-items:center; height:238px; margin:0 -4px 8px; border-radius:16px; overflow:hidden;
+  background:radial-gradient(70% 70% at 50% 38%, var(--accent-soft), transparent 75%), linear-gradient(180deg, var(--surface-2), var(--surface)); border:1px solid var(--border); perspective:700px; }
+.charStage::after{ content:""; position:absolute; left:18%; right:18%; bottom:10px; height:12px; border-radius:50%; background:radial-gradient(closest-side, rgba(0,0,0,.45), transparent); }
+#charPreview{ transform:rotateY(var(--ry,0deg)) rotateX(var(--rx,0deg)); transition:transform .18s ease-out; transform-style:preserve-3d; filter:drop-shadow(0 16px 18px rgba(0,0,0,.35)); }
+.charTools{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+.charUnlockInfo{ font-size:13px; color:var(--text-dim); }
+.charTabs{ display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; margin-bottom:12px; scrollbar-width:none; }
+.charTabs::-webkit-scrollbar{ display:none; }
+.charTabs button{ flex:none; padding:8px 14px; border-radius:100px; border:1px solid var(--border); background:transparent; color:var(--text-dim); font:600 14px "Barlow Condensed",sans-serif; letter-spacing:.1em; text-transform:uppercase; cursor:pointer; }
+.charTabs button.active{ background:var(--cta); color:var(--cta-text); border-color:transparent; box-shadow:0 6px 14px -8px var(--cta-glow); }
+.charPanel{ max-height:230px; overflow-y:auto; overscroll-behavior:contain; margin-bottom:6px; padding-right:2px; }
+.chSection{ margin-bottom:14px; }
+.chTitle{ font:600 12px "Barlow Condensed",sans-serif; letter-spacing:.16em; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; }
+.chGrid{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+.chTile{ position:relative; display:flex; flex-direction:column; align-items:center; gap:2px; padding:6px 2px 6px; border-radius:12px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); cursor:pointer; min-width:0; }
+.chTile svg{ height:58px; width:auto; max-width:100%; }
+.chTile .chrFig, .chTile .eyes{ animation:none; }
+.chTile .chName{ font-size:11px; line-height:1.15; color:var(--text-dim); text-align:center; overflow-wrap:anywhere; }
+.chTile.on{ border-color:var(--accent); background:var(--accent-soft); box-shadow:0 0 0 1px var(--accent); }
+.chTile.on .chName{ color:var(--text); font-weight:600; }
+.chTile.locked svg{ opacity:.35; filter:grayscale(.8); }
+.chTile .chLock{ position:absolute; top:5px; right:5px; font-style:normal; font-size:12px; }
+.swatches{ display:flex; flex-wrap:wrap; gap:9px; }
+.swatch{ width:34px; height:34px; border-radius:50%; border:2px solid transparent; box-shadow:inset 0 -3px 6px rgba(0,0,0,.25), inset 0 2px 3px rgba(255,255,255,.3); cursor:pointer; padding:0; }
+.swatch.on{ border-color:var(--text); box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--accent), inset 0 -3px 6px rgba(0,0,0,.25); }
+
+/* Charaktere auf dem Podest und in der Personenansicht */
+.pod .podChar{ display:block; }
+.pod .podChar .chr{ margin:0 auto; filter:drop-shadow(0 8px 10px rgba(0,0,0,.35)); }
+.pod .podChar .rbadge{ position:absolute; right:-2px; bottom:4px; background:var(--surface); border-radius:50%; padding:1.5px; }
+.pod .podWho{ padding-bottom:0; gap:3px; }
+.pod .podName{ margin-top:2px; }
+.pod .podVal{ margin-bottom:8px; }
+.pod.p1 .podChar .chr{ filter:drop-shadow(0 8px 14px rgba(255,200,87,.35)); }
+.pod.p1 .avatar{ box-shadow:none; }
+.playerChar .chr{ filter:drop-shadow(0 8px 10px rgba(0,0,0,.35)); }
+.playerHead{ gap:12px; }
+@media (prefers-reduced-motion: reduce){ .chr .chrFig, .chr .eyes{ animation:none; } #charPreview{ transition:none; } }

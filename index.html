@@ -426,6 +426,15 @@
     <button class="secondary" id="avatarRemove" type="button">Bild entfernen</button>
     <div class="feedback" id="profileMsg" hidden></div>
 
+    <div class="charRow">
+      <button class="charThumb" id="profileChar" type="button" aria-label="Charakter bearbeiten"></button>
+      <div class="pushText">
+        <div class="pushTitle">Dein Charakter</div>
+        <div class="hint">Er steht auf dem Podest der Rangliste, wenn du vorne liegst.</div>
+      </div>
+      <button class="secondary small" id="charOpen" type="button">Bearbeiten</button>
+    </div>
+
     <div class="pushBox" id="pushBox" hidden>
       <div class="pushText">
         <div class="pushTitle">Chat-Benachrichtigungen</div>
@@ -442,6 +451,29 @@
     </label>
     <button class="secondary helpOpen" id="helpOpen" type="button">So funktioniert's</button>
     <div class="center"><button class="link" id="profileClose" type="button">Schließen</button></div>
+  </div>
+</div>
+
+<!-- ===== Charakter-Editor ===== -->
+<div class="modal charModal" id="charModal" hidden>
+  <div class="sheet charSheet" role="dialog" aria-modal="true" aria-labelledby="charTitle">
+    <h3 class="cardTitle" id="charTitle">Dein Charakter</h3>
+    <div class="charStage" id="charStage"><div id="charPreview"></div></div>
+    <div class="charTools">
+      <span class="charUnlockInfo" id="charUnlockInfo"></span>
+      <button class="secondary small" id="charRandom" type="button">Zufällig</button>
+    </div>
+    <div class="charTabs" id="charTabs" role="tablist">
+      <button type="button" data-ct="face" class="active">Gesicht</button>
+      <button type="button" data-ct="hair">Haare</button>
+      <button type="button" data-ct="outfit">Outfit</button>
+      <button type="button" data-ct="extras">Extras</button>
+      <button type="button" data-ct="bg">Aura</button>
+    </div>
+    <div class="charPanel" id="charPanel"></div>
+    <div class="feedback" id="charMsg" hidden></div>
+    <button class="primary" id="charSave" type="button">Speichern</button>
+    <div class="center"><button class="link" id="charCancel" type="button">Abbrechen</button></div>
   </div>
 </div>
 

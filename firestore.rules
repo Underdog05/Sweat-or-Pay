@@ -51,6 +51,11 @@ service cloud.firestore {
             && (d.avatar == '' || d.avatar.matches('^data:image/jpeg;base64,[A-Za-z0-9+/=]+$')));
     }
 
+    function validChar(d) {
+      return !('char' in d)
+        || (d.char is string && d.char.size() <= 120 && d.char.matches('^[a-z0-9=._-]*$'));
+    }
+
     function validReaction(d, rid) {
       return d.keys().hasOnly(['entryId', 'date', 'uid', 'key', 'createdAt'])
         && d.uid == request.auth.uid
@@ -69,11 +74,12 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow create, update: if signedIn() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['name', 'createdAt', 'avatar'])
+        && request.resource.data.keys().hasOnly(['name', 'createdAt', 'avatar', 'char'])
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 30
         && request.resource.data.createdAt is string
-        && validAvatar(request.resource.data);
+        && validAvatar(request.resource.data)
+        && validChar(request.resource.data);
 
       match /groups/{gid} {
         allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
@@ -115,21 +121,23 @@ service cloud.firestore {
       match /members/{uid} {
         allow read: if isMember(gid) || isAdmin();
         allow create: if signedIn() && request.auth.uid == uid
-          && request.resource.data.keys().hasOnly(['name', 'code', 'joinedAt', 'avatar'])
+          && request.resource.data.keys().hasOnly(['name', 'code', 'joinedAt', 'avatar', 'char'])
           && request.resource.data.name is string
           && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 30
           && request.resource.data.code is string
           && request.resource.data.joinedAt is string
           && validAvatar(request.resource.data)
+          && validChar(request.resource.data)
           && exists(groupPath(gid))
           && get(groupPath(gid)).data.code == request.resource.data.code;
         // Eigenes Profilbild aktualisieren; Name, Code und Beitrittsdatum bleiben unverändert.
         allow update: if signedIn() && request.auth.uid == uid
-          && request.resource.data.keys().hasOnly(['name', 'code', 'joinedAt', 'avatar'])
+          && request.resource.data.keys().hasOnly(['name', 'code', 'joinedAt', 'avatar', 'char'])
           && request.resource.data.name == resource.data.name
           && request.resource.data.code == resource.data.code
           && request.resource.data.joinedAt == resource.data.joinedAt
-          && validAvatar(request.resource.data);
+          && validAvatar(request.resource.data)
+          && validChar(request.resource.data);
         allow delete: if signedIn() && (request.auth.uid == uid || isAdmin() || isGroupAdmin(gid));
       }
 

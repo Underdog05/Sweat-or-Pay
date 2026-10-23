@@ -1,4 +1,8 @@
 import { CONFIG } from "./config.js";
+import {
+  charSVG, parseChar, serializeChar, randomChar, withAcc, safeChar, isUnlocked,
+  SKIN, SKIN_NAMES, HAIR_COL, HAIR_COL_NAMES, OUT_COL, OUT_COL_NAMES, EYES, MOUTHS, HAIRS, OUTFITS, BGS, ACCS,
+} from "./char.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -73,7 +77,7 @@ function safeAvatar(v) {
 
 /* ---------- state ---------- */
 
-const S = { user: null, name: "", avatar: "", isAdmin: false, memberships: [], mLoaded: false, homeForm: null, pendingName: null, profileTried: false, view: null, g: null };
+const S = { user: null, name: "", avatar: "", char: "", um: null, isAdmin: false, memberships: [], mLoaded: false, homeForm: null, pendingName: null, profileTried: false, view: null, g: null };
 const subs = { profile: null, memberships: null };
 let homeToken = 0;
 let adminToken = 0;
@@ -115,6 +119,9 @@ function avatarEl(m, size, isMe) {
     img.src = src;
     img.alt = "";
     a.append(img);
+  } else if (m.char) {
+    a.classList.add("charFace");
+    a.append(charSVG(parseChar(m.char, m.uid || m.name), { size, head: true }));
   } else {
     a.textContent = ((m.name || "").trim()[0] || "?").toUpperCase();
   }
@@ -123,7 +130,7 @@ function avatarEl(m, size, isMe) {
 
 function updateBadge() {
   $("whoBadge").replaceChildren(
-    avatarEl({ name: S.name, avatar: S.avatar }, 28, true),
+    avatarEl({ name: S.name, avatar: S.avatar, char: S.char, uid: S.user && S.user.uid }, 28, true),
     el("span", "wbName", S.name + (S.isAdmin ? " · Admin" : ""))
   );
 }
@@ -281,6 +288,7 @@ function endSplash(force) {
 
 function openProfile() {
   $("profileAvatar").replaceChildren(avatarEl({ name: S.name, avatar: S.avatar }, 72, true));
+  renderProfileChar();
   $("profileName").textContent = S.name;
   $("avatarRemove").hidden = !S.avatar;
   setMsg($("profileMsg"), "");
@@ -317,7 +325,7 @@ async function fileToAvatar(file) {
 
 async function saveAvatar(url) {
   const uid = S.user.uid;
-  await setDoc(doc(db, "users", uid), { name: S.name, createdAt: nowIso(), avatar: url });
+  await setDoc(doc(db, "users", uid), { name: S.name, createdAt: nowIso(), avatar: url, char: S.char || "" });
   S.avatar = url;
   updateBadge();
   await Promise.all(S.memberships.map((gid) => updateDoc(doc(db, "groups", gid, "members", uid), { avatar: url }).catch(() => {})));
@@ -350,6 +358,193 @@ async function removeAvatar() {
   } catch (err) {
     setMsg(msg, "Das hat nicht geklappt. Bitte versuche es nochmal.");
   }
+}
+
+/* ---------- Charakter: Editor, Speichern, Freischaltungen ---------- */
+
+const memberChar = (m) => parseChar(m.uid === (S.user && S.user.uid) ? S.char || m.char : m.char, m.uid);
+const umKey = () => "sop_um_" + S.user.uid;
+const unlKey = () => "sop_unl_" + S.user.uid;
+const UNLOCKABLES = [
+  ...ACCS.filter((a) => a.unlock).map((a) => ({ key: "a:" + a.id, name: a.name, unlock: a.unlock })),
+  ...OUTFITS.map((o, i) => ({ key: "o:" + i, name: o.name, unlock: o.unlock })).filter((o) => o.unlock),
+  ...BGS.map((b, i) => ({ key: "b:" + i, name: b.name + " (Aura)", unlock: b.unlock })).filter((b) => b.unlock),
+];
+
+function loadUM() {
+  if (S.um) return S.um;
+  let um = null;
+  try { um = JSON.parse(localStorage.getItem(umKey())); } catch (e) { um = null; }
+  S.um = Object.assign({ best: 0, done: 0, total: 0, top: 0 }, um && typeof um === "object" ? um : {});
+  return S.um;
+}
+
+// Meilensteine aus der geöffneten Gruppe lesen; der beste Stand bleibt auf diesem Gerät gespeichert.
+function updateUnlocks(G, me) {
+  const st = G.stats && G.stats[me];
+  if (!st) return;
+  const am = achStats(G, me);
+  const um = loadUM();
+  const now = { best: am.best, done: am.doneDays, total: st.sit + st.push, top: Math.max(st.sit, st.push) };
+  let changed = false;
+  Object.keys(now).forEach((k) => { if (now[k] > um[k]) { um[k] = now[k]; changed = true; } });
+  if (changed) { try { localStorage.setItem(umKey(), JSON.stringify(um)); } catch (e) {} }
+  if (!G.serverSynced) return;
+  const open = UNLOCKABLES.filter((u) => isUnlocked(u, um)).map((u) => u.key);
+  let seen = null;
+  try { seen = JSON.parse(localStorage.getItem(unlKey())); } catch (e) { seen = null; }
+  const store = (ids) => { try { localStorage.setItem(unlKey(), JSON.stringify(ids)); } catch (e) {} };
+  if (!Array.isArray(seen)) { store(open); return; }
+  const fresh = open.filter((k) => !seen.includes(k));
+  if (fresh.length) {
+    store([...new Set([...seen, ...fresh])]);
+    const names = fresh.map((k) => UNLOCKABLES.find((u) => u.key === k).name);
+    flash("Neu freigeschaltet: " + names.join(", ") + ". Rüste es im Charakter-Editor aus.", "ok");
+    if (window.SOPUI) window.SOPUI.haptic("goal");
+  }
+}
+
+function renderProfileChar() {
+  if (!S.user) return;
+  $("profileChar").replaceChildren(charSVG(parseChar(S.char, S.user.uid), { size: 84, head: true }));
+}
+
+async function saveChar(str) {
+  const uid = S.user.uid;
+  await setDoc(doc(db, "users", uid), { name: S.name, createdAt: nowIso(), avatar: S.avatar || "", char: str });
+  S.char = str;
+  updateBadge();
+  renderProfileChar();
+  await Promise.all(S.memberships.map((gid) => updateDoc(doc(db, "groups", gid, "members", uid), { char: str }).catch(() => {})));
+}
+
+const CE = { cfg: null, tab: "face" };
+
+function lockHint(item) {
+  const um = loadUM(), u = item.unlock;
+  return "Gesperrt: " + u.t + " (aktuell " + nf(Math.min(um[u.k] || 0, u.v)) + " von " + nf(u.v) + ")";
+}
+
+function renderCharEditor() {
+  const cfg = CE.cfg, um = loadUM();
+  $("charPreview").replaceChildren(charSVG(cfg, { size: 210 }));
+  const total = UNLOCKABLES.length, open = UNLOCKABLES.filter((u) => isUnlocked(u, um)).length;
+  $("charUnlockInfo").textContent = open + " von " + total + " Extras freigeschaltet";
+  document.querySelectorAll("#charTabs button").forEach((b) => b.classList.toggle("active", b.dataset.ct === CE.tab));
+
+  const set = (patch) => { CE.cfg = { ...CE.cfg, ...patch }; setMsg($("charMsg"), ""); renderCharEditor(); if (window.SOPUI) window.SOPUI.haptic("select"); };
+  const tile = (label, cfgPreview, opt, selected, onClick, locked, item) => {
+    const b = el("button", "chTile" + (selected ? " on" : "") + (locked ? " locked" : ""));
+    b.type = "button";
+    b.append(charSVG(cfgPreview, opt));
+    b.append(el("span", "chName", label));
+    if (locked) {
+      b.append(el("i", "chLock", "🔒"));
+      b.addEventListener("click", () => setMsg($("charMsg"), lockHint(item)));
+    } else {
+      b.addEventListener("click", onClick);
+    }
+    return b;
+  };
+  const swatch = (colors, names, key, current) => {
+    const row = el("div", "swatches");
+    colors.forEach((col, i) => {
+      const b = el("button", "swatch" + (i === current ? " on" : ""));
+      b.type = "button";
+      b.title = names[i];
+      b.setAttribute("aria-label", names[i]);
+      b.style.background = Array.isArray(col) ? "linear-gradient(135deg," + col[0] + "," + col[1] + ")" : col;
+      b.addEventListener("click", () => set({ [key]: i }));
+      row.append(b);
+    });
+    return row;
+  };
+  const section = (title, node) => { const s = el("div", "chSection"); s.append(el("div", "chTitle", title), node); return s; };
+  const grid = (nodes) => { const g = el("div", "chGrid"); g.append(...nodes); return g; };
+  const head = { size: 62, head: true };
+  const bust = { size: 76, plain: true };
+
+  let sections = [];
+  if (CE.tab === "face") {
+    sections = [
+      section("Hautton", swatch(SKIN, SKIN_NAMES, "s", cfg.s)),
+      section("Augen", grid(EYES.map((n, i) => tile(n, { ...cfg, e: i }, head, cfg.e === i, () => set({ e: i }))))),
+      section("Mund", grid(MOUTHS.map((n, i) => tile(n, { ...cfg, m: i }, head, cfg.m === i, () => set({ m: i }))))),
+    ];
+  } else if (CE.tab === "hair") {
+    sections = [
+      section("Frisur", grid(HAIRS.map((n, i) => tile(n, { ...cfg, h: i }, head, cfg.h === i, () => set({ h: i }))))),
+      section("Haarfarbe", swatch(HAIR_COL, HAIR_COL_NAMES, "c", cfg.c)),
+    ];
+  } else if (CE.tab === "outfit") {
+    sections = [
+      section("Oberteil", grid(OUTFITS.map((o, i) => {
+        const locked = !isUnlocked(o, um) && cfg.o !== i;
+        return tile(o.name, { ...cfg, o: i, a: [] }, bust, cfg.o === i, () => set({ o: i }), locked, o);
+      }))),
+      section("Farbe", swatch(OUT_COL, OUT_COL_NAMES, "k", cfg.k)),
+    ];
+  } else if (CE.tab === "extras") {
+    const slots = [["head", "Kopf"], ["eyes", "Augen"], ["beard", "Bart"], ["ear", "Ohr"], ["neck", "Hals"]];
+    sections = slots.map(([slot, title]) => section(title, grid(ACCS.filter((a) => a.slot === slot).map((a) => {
+      const on = cfg.a.includes(a.id);
+      const locked = !isUnlocked(a, um) && !on;
+      const prev = withAcc({ ...cfg, a: cfg.a.filter((x) => x !== a.id) }, a.id);
+      return tile(a.name, prev, a.slot === "neck" ? bust : head, on, () => set({ a: on ? cfg.a.filter((x) => x !== a.id) : withAcc(cfg, a.id).a }), locked, a);
+    }))));
+  } else {
+    sections = [section("Aura hinter dir", grid(BGS.map((b, i) => {
+      const locked = !isUnlocked(b, um) && cfg.b !== i;
+      return tile(b.name, { ...cfg, b: i }, bust, cfg.b === i, () => set({ b: i }), locked, b);
+    })))];
+  }
+  $("charPanel").replaceChildren(...sections);
+}
+
+function openCharEditor() {
+  CE.cfg = parseChar(S.char, S.user.uid);
+  CE.tab = "face";
+  setMsg($("charMsg"), "");
+  $("charModal").hidden = false;
+  renderCharEditor();
+}
+
+async function submitChar() {
+  const btn = $("charSave");
+  btn.disabled = true;
+  try {
+    await saveChar(serializeChar(CE.cfg));
+    $("charModal").hidden = true;
+    flash("Dein Charakter ist gespeichert.", "ok");
+    if (window.SOPUI) window.SOPUI.haptic("success");
+  } catch (err) {
+    setMsg($("charMsg"), "Das Speichern hat nicht geklappt. Prüfe deine Verbindung.");
+    if (window.SOPUI) window.SOPUI.fail(btn);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function wireChar() {
+  $("charOpen").addEventListener("click", openCharEditor);
+  $("profileChar").addEventListener("click", openCharEditor);
+  $("charCancel").addEventListener("click", () => { $("charModal").hidden = true; });
+  $("charModal").addEventListener("click", (e) => { if (e.target === $("charModal")) $("charModal").hidden = true; });
+  $("charSave").addEventListener("click", submitChar);
+  $("charRandom").addEventListener("click", () => {
+    CE.cfg = randomChar(); // nutzt nur frei verfügbare Teile
+    setMsg($("charMsg"), "");
+    renderCharEditor();
+    if (window.SOPUI) window.SOPUI.haptic("tap");
+  });
+  document.querySelectorAll("#charTabs button").forEach((b) => b.addEventListener("click", () => { CE.tab = b.dataset.ct; renderCharEditor(); $("charPanel").scrollTop = 0; }));
+  const stage = $("charStage");
+  stage.addEventListener("pointermove", (e) => {
+    const r = stage.getBoundingClientRect();
+    stage.style.setProperty("--ry", ((e.clientX - r.left) / r.width - 0.5) * 30 + "deg");
+    stage.style.setProperty("--rx", -((e.clientY - r.top) / r.height - 0.5) * 18 + "deg");
+  });
+  stage.addEventListener("pointerleave", () => { stage.style.setProperty("--ry", "0deg"); stage.style.setProperty("--rx", "0deg"); });
 }
 
 /* ---------- Handy-Benachrichtigungen ---------- */
@@ -552,7 +747,7 @@ function onAuth(user) {
   closeProfile();
 
   if (!user) {
-    S.name = ""; S.avatar = ""; S.isAdmin = false; S.memberships = []; S.mLoaded = false; S.homeForm = null; S.pendingName = null; S.profileTried = false;
+    S.name = ""; S.avatar = ""; S.char = ""; S.um = null; S.isAdmin = false; S.memberships = []; S.mLoaded = false; S.homeForm = null; S.pendingName = null; S.profileTried = false;
     $("authPass").value = "";
     show("viewAuth");
     return;
@@ -560,6 +755,8 @@ function onAuth(user) {
 
   S.name = S.pendingName || user.displayName || (user.email || "").split("@")[0] || "Spieler";
   S.avatar = "";
+  S.char = "";
+  S.um = null;
   updateBadge();
 
   getDoc(doc(db, "admins", user.uid)).then((s) => s.exists(), () => false).then((isAdmin) => {
@@ -574,7 +771,9 @@ function onAuth(user) {
     if (snap.exists()) {
       S.name = snap.data().name;
       S.avatar = safeAvatar(snap.data().avatar);
+      S.char = safeChar(snap.data().char);
       updateBadge();
+      renderProfileChar();
     } else if (!S.profileTried) {
       S.profileTried = true;
       setDoc(doc(db, "users", user.uid), { name: S.name, createdAt: nowIso() }).catch(() => {});
@@ -709,7 +908,7 @@ async function joinGroup(e) {
     const gid = c.data().groupId;
     if (S.memberships.includes(gid)) { location.hash = "g/" + gid; return; }
     const now = nowIso();
-    await setDoc(doc(db, "groups", gid, "members", S.user.uid), { name: S.name, code, joinedAt: now, avatar: S.avatar || "" });
+    await setDoc(doc(db, "groups", gid, "members", S.user.uid), { name: S.name, code, joinedAt: now, avatar: S.avatar || "", char: S.char || "" });
     await setDoc(doc(db, "users", S.user.uid, "groups", gid), { joinedAt: now });
     $("joinCode").value = "";
     location.hash = "g/" + gid;
@@ -758,7 +957,7 @@ async function createGroup(e) {
         await updateDoc(doc(db, "groups", gid), { code });
       }
     }
-    await setDoc(doc(db, "groups", gid, "members", uid), { name: S.name, code, joinedAt: now, avatar: S.avatar || "" });
+    await setDoc(doc(db, "groups", gid, "members", uid), { name: S.name, code, joinedAt: now, avatar: S.avatar || "", char: S.char || "" });
     await setDoc(doc(db, "users", uid, "groups", gid), { joinedAt: now });
     $("createName").value = "";
     $("createDetails").open = false;
@@ -996,9 +1195,9 @@ function renderBoard() {
     const pos = posOf(m), v = val(m);
     const col = el("div", "pod p" + Math.min(pos, 3) + (v > 0 ? "" : " zero") + (m.uid === me ? " me" : ""));
     const who = el("div", "podWho");
-    const wrap = el("div", "avWrap");
-    wrap.append(avatarEl(m, pos === 1 ? 64 : 52, m.uid === me));
-    if (withRank) wrap.append(rankImg(rankFor(v).level, pos === 1 ? 26 : 22));
+    const wrap = el("div", "avWrap podChar");
+    wrap.append(charSVG(memberChar(m), { size: pos === 1 ? 128 : 100, mood: pos === 1 ? "joy" : "" }));
+    if (withRank) wrap.append(rankImg(rankFor(v).level, pos === 1 ? 30 : 26));
     who.append(wrap, el("div", "podName", m.name + (m.uid === me ? " (du)" : "")), el("div", "podVal num", nf(v) + unitOf(v)));
     const block = el("div", "podBlock", String(pos));
     col.append(who, block);
@@ -1489,7 +1688,7 @@ function startGroup(id) {
   }, fail));
   G.unsubs.push(onSnapshot(collection(gref, "members"), (snap) => {
     if (G.stopped) return;
-    G.members = snap.docs.map((d) => ({ uid: d.id, name: String(d.data().name || "?"), avatar: safeAvatar(d.data().avatar) }));
+    G.members = snap.docs.map((d) => ({ uid: d.id, name: String(d.data().name || "?"), avatar: safeAvatar(d.data().avatar), char: safeChar(d.data().char) }));
     G.loaded.m = true; renderGroup();
   }, fail));
   G.unsubs.push(onSnapshot(collection(gref, "entries"), (snap) => {
@@ -1747,7 +1946,9 @@ function renderPlayer(m) {
     nb.addEventListener("click", () => nudgeMember(m, nb));
     info.append(nb);
   }
-  head.append(avatarEl(m, 72, m.uid === me), info);
+  const figure = el("div", "playerChar");
+  figure.append(charSVG(memberChar(m), { size: 118 }));
+  head.append(figure, info);
   nodes.push(head);
 
   const tiles = el("section", "card");
@@ -1892,6 +2093,7 @@ function renderGroup() {
   });
   G.stats = stats;
   G.membersView = members;
+  if (member) updateUnlocks(G, me);
   renderTeam(members);
   renderRanks(member);
   renderAchievements(G, me, member);
@@ -2108,6 +2310,7 @@ function wire() {
   $("avatarPick").addEventListener("click", () => $("avatarFile").click());
   $("avatarFile").addEventListener("change", onAvatarPicked);
   $("avatarRemove").addEventListener("click", removeAvatar);
+  wireChar();
   $("pushToggle").addEventListener("click", togglePush);
   $("celClose").addEventListener("click", nextCelebration);
 

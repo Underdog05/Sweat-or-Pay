@@ -1,5 +1,5 @@
-const CACHE = "sweat-or-pay-v19";
-const SHELL = ["./", "./index.html", "./style.css", "./motion.css", "./motion.js", "./app.js", "./config.js", "./manifest.webmanifest", "./icons/icon-192.png"];
+const CACHE = "sweat-or-pay-v20";
+const SHELL = ["./", "./index.html", "./style.css", "./motion.css", "./motion.js", "./char.js", "./app.js", "./config.js", "./manifest.webmanifest", "./icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
