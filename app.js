@@ -73,7 +73,7 @@ function safeAvatar(v) {
 
 /* ---------- state ---------- */
 
-const S = { user: null, name: "", avatar: "", isAdmin: false, memberships: [], pendingName: null, profileTried: false, view: null, g: null };
+const S = { user: null, name: "", avatar: "", isAdmin: false, memberships: [], mLoaded: false, homeForm: null, pendingName: null, profileTried: false, view: null, g: null };
 const subs = { profile: null, memberships: null };
 let homeToken = 0;
 let adminToken = 0;
@@ -267,7 +267,7 @@ function endSplash(force) {
   const wait = force ? 0 : Math.max(0, minShow - (performance.now() - splashStart));
   setTimeout(() => {
     node.classList.add("leave");
-    setTimeout(() => node.remove(), 800);
+    setTimeout(() => node.remove(), reduceMotion() ? 500 : 1500);
   }, wait);
 }
 
@@ -552,7 +552,7 @@ function onAuth(user) {
   closeProfile();
 
   if (!user) {
-    S.name = ""; S.avatar = ""; S.isAdmin = false; S.memberships = []; S.pendingName = null; S.profileTried = false;
+    S.name = ""; S.avatar = ""; S.isAdmin = false; S.memberships = []; S.mLoaded = false; S.homeForm = null; S.pendingName = null; S.profileTried = false;
     $("authPass").value = "";
     show("viewAuth");
     return;
@@ -583,6 +583,7 @@ function onAuth(user) {
 
   subs.memberships = onSnapshot(collection(db, "users", user.uid, "groups"), (snap) => {
     S.memberships = snap.docs.map((d) => d.id);
+    S.mLoaded = true;
     if (S.view === "viewHome") renderHome();
   }, () => {});
 
@@ -639,10 +640,21 @@ async function homeInfo(gid, grp) {
   return { streak, status };
 }
 
+function applyHomeMode(hasGroups) {
+  const f = S.homeForm;
+  const loading = hasGroups === null;
+  const none = hasGroups === false;
+  $("startChoices").hidden = loading || !none || !!f;
+  $("joinCard").hidden = loading || (none && f !== "join");
+  $("createDetails").hidden = loading || (none && f !== "create");
+  $("startBack").hidden = loading || !none || !f;
+}
+
 async function renderHome() {
   const token = ++homeToken;
-  $("groupEmpty").hidden = S.memberships.length > 0;
-  const rows = await Promise.all(S.memberships.map(async (id) => {
+  $("groupEmpty").hidden = true;
+  if (!S.mLoaded) { applyHomeMode(null); return; }
+  applyHomeMode(S.memberships.length > 0);  const rows = await Promise.all(S.memberships.map(async (id) => {
     try {
       const s = await getDoc(doc(db, "groups", id));
       if (!s.exists()) return { id, stale: true };
@@ -680,6 +692,7 @@ async function renderHome() {
     list.append(a);
   });
   $("helloKicker").textContent = "Hallo " + S.name;
+  applyHomeMode(shown > 0);
   $("helloTitle").textContent = shown === 0 ? "Meine Gruppen" : open > 0 ? "Heute ist noch was offen" : "Alles erledigt. Stark!";
 }
 
@@ -1099,6 +1112,7 @@ function renderHero() {
   else if (complete) sub = savedDone ? "Gespeichert. Bis morgen!" : "Jetzt nur noch speichern.";
   else if (!(saved && saved.skipped)) sub = "Noch " + untilMidnight() + " bis Mitternacht";
   $("heroSub").textContent = sub;
+  $("heroCta").hidden = !(sel === today && !saved && pct === 0);
 
   const d0 = new Date(sel + "T00:00:00");
   d0.setDate(d0.getDate() - ((d0.getDay() + 6) % 7));
@@ -1523,14 +1537,67 @@ function updateBars() {
   $("situpsCount").textContent = s + " / " + G.group.situps;
   $("pushupsCount").textContent = p + " / " + G.group.pushups;
   renderHero();
+  updateSaveBar();
 }
 
+const TIPS = {
+  feed: "Hier siehst du, was die anderen geschafft haben. Tippe auf „Reagieren“ und schick ihnen einen Spruch.",
+  rang: "Jede Wiederholung zählt für deinen Rang. Sammle Erfolge und steige bis Mythos auf.",
+  chat: "Schreib der Gruppe. Ein roter Punkt am Reiter zeigt dir neue Nachrichten.",
+  gruppe: "Bilanz zeigt, wer wie viel schuldet. Den Einladungscode zum Einladen findest du unter „Gruppe“.",
+};
+const tipSeen = (tab) => { try { return localStorage.getItem("sop_tip_" + tab) === "1"; } catch (e) { return false; } };
+function showTip(tab) {
+  const box = $("tipBox");
+  if (!TIPS[tab] || tipSeen(tab)) { box.hidden = true; return; }
+  box.dataset.tab = tab;
+  $("tipText").textContent = TIPS[tab];
+  box.hidden = false;
+}
+
+function isDirty() {
+  const G = S.g;
+  if (!G || !G.group || !isMemberOf(G)) return false;
+  const saved = entryFor(G, S.user.uid, G.selectedDate);
+  const s = cleanReps($("situpsInput").value), p = cleanReps($("pushupsInput").value);
+  const skip = $("skipInput").checked && !$("skipInput").disabled;
+  if (!saved) return s > 0 || p > 0 || skip;
+  return saved.situps !== s || saved.pushups !== p || saved.skipped !== skip;
+}
+
+function updateSaveBar() {
+  $("saveBar").hidden = !(S.view === "viewGroup" && S.g && S.g.tab === "today" && isDirty());
+}
+
+function renderStartCard(G, me, member) {
+  const card = $("startCard");
+  let hidden = false;
+  try { hidden = localStorage.getItem("sop_start_hidden_" + me + "_" + G.id) === "1"; } catch (e) {}
+  const items = [
+    { done: true, label: "Gruppe beigetreten" },
+    { done: G.entries.some((e) => e.uid === me), label: "Ersten Tag eintragen", go: () => $("entryCard").scrollIntoView({ behavior: "smooth", block: "start" }) },
+    { done: G.members.length >= 2, label: "Freunde einladen (Code im Reiter Gruppe)", go: () => { setTab("gruppe"); setSec("info"); } },
+  ];
+  if (pushSupported() && Notification.permission !== "granted") items.push({ done: false, label: "Benachrichtigungen aktivieren", go: openProfile });
+  card.hidden = !member || hidden || items.every((i) => i.done);
+  if (card.hidden) return;
+  $("startList").replaceChildren(...items.map((i) => {
+    const b = el("button", "startItem" + (i.done ? " done" : ""));
+    b.type = "button";
+    b.disabled = i.done;
+    b.append(el("span", "tick", "✓"), el("span", "", i.label));
+    if (!i.done) { b.append(el("span", "go", "›")); b.addEventListener("click", i.go); }
+    return b;
+  }));
+}
 const PANES = { today: "paneToday", feed: "paneFeed", rang: "paneRang", chat: "paneChat", gruppe: "paneGruppe" };
 function setTab(tab) {
   if (S.g) S.g.tab = tab;
   Object.keys(PANES).forEach((t) => { $(PANES[t]).hidden = t !== tab; });
   document.querySelectorAll(".tabbar button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   window.scrollTo(0, 0);
+  showTip(tab);
+  updateSaveBar();
   if (tab === "chat" && S.g) { scrollChatBottom(); S.g.chatScrolled = true; updateChatBadge(); }
 }
 
@@ -1709,6 +1776,8 @@ function renderGroup() {
 
   renderFeed();
   renderChat();
+  renderStartCard(G, me, member);
+  updateSaveBar();
 }
 
 /* ---------- group actions ---------- */
@@ -1881,6 +1950,28 @@ function wire() {
   $("situpsInput").addEventListener("input", updateBars);
   $("pushupsInput").addEventListener("input", updateBars);
   $("saveBtn").addEventListener("click", saveEntry);
+  $("saveBarBtn").addEventListener("click", saveEntry);
+  $("skipInput").addEventListener("change", updateSaveBar);
+  $("heroCta").addEventListener("click", () => $("entryCard").scrollIntoView({ behavior: "smooth", block: "start" }));
+  $("startHide").addEventListener("click", () => {
+    const G = S.g;
+    if (!G) return;
+    try { localStorage.setItem("sop_start_hidden_" + S.user.uid + "_" + G.id, "1"); } catch (e) {}
+    $("startCard").hidden = true;
+  });
+  $("tipOk").addEventListener("click", () => {
+    try { localStorage.setItem("sop_tip_" + $("tipBox").dataset.tab, "1"); } catch (e) {}
+    $("tipBox").hidden = true;
+  });
+  $("chooseCreate").addEventListener("click", () => { S.homeForm = "create"; applyHomeMode(false); $("createDetails").open = true; $("createName").focus(); });
+  $("chooseJoin").addEventListener("click", () => { S.homeForm = "join"; applyHomeMode(false); $("joinCode").focus(); });
+  $("startBack").addEventListener("click", () => { S.homeForm = null; applyHomeMode(false); });
+  const openHelp = () => { $("helpModal").hidden = false; };
+  const closeHelp = () => { $("helpModal").hidden = true; };
+  $("helpOpen").addEventListener("click", openHelp);
+  $("helpAuth").addEventListener("click", openHelp);
+  $("helpClose").addEventListener("click", closeHelp);
+  $("helpModal").addEventListener("click", (e) => { if (e.target === $("helpModal")) closeHelp(); });
   document.querySelectorAll(".tabbar button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
   document.querySelectorAll("#groupSeg button").forEach((b) => b.addEventListener("click", () => setSec(b.dataset.sec)));
   document.querySelectorAll("#metricSeg button").forEach((b) => b.addEventListener("click", () => {

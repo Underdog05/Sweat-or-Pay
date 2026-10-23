@@ -19,16 +19,22 @@
 </head>
 <body>
 <div class="splash" id="splash" aria-hidden="true">
-  <svg class="splashLogo" viewBox="16 16 68 68" fill="none" stroke-linecap="round">
-    <path class="bar" pathLength="1" d="M34.25 30V70"/>
-    <path class="bar" pathLength="1" d="M44.75 30V70"/>
-    <path class="bar" pathLength="1" d="M55.25 30V70"/>
-    <path class="bar" pathLength="1" d="M65.75 30V70"/>
-    <path class="strike" pathLength="1" d="M26 66L74 34"/>
-  </svg>
-  <div class="splashWord">Sweat <em>or</em> Pay</div>
-  <div class="splashLine"></div>
-  <div class="splashTag">Jeden Tag. Gemeinsam. Sonst zahlst du.</div>
+  <div class="splashPanel top"></div>
+  <div class="splashPanel bottom"></div>
+  <div class="splashSeam"></div>
+  <div class="splashContent">
+    <svg class="splashLogo" viewBox="16 16 68 68" fill="none" stroke-linecap="round">
+      <path class="bar" pathLength="1" d="M34.25 30V70"/>
+      <path class="bar" pathLength="1" d="M44.75 30V70"/>
+      <path class="bar" pathLength="1" d="M55.25 30V70"/>
+      <path class="bar" pathLength="1" d="M65.75 30V70"/>
+      <path class="strike" pathLength="1" d="M26 66L74 34"/>
+    </svg>
+    <div class="splashWord">Sweat <em>or</em> Pay</div>
+    <div class="splashLine"></div>
+    <div class="splashTag">Jeden Tag. Gemeinsam. Sonst zahlst du.</div>
+  </div>
+</div>
 </div>
 <canvas id="fx" aria-hidden="true"></canvas>
 <div id="app">
@@ -71,6 +77,12 @@
         <div class="center"><button class="link" id="forgotBtn" type="button">Passwort vergessen?</button></div>
       </form>
     </div>
+    <ol class="howto">
+      <li><b>1</b><span>Konto anlegen</span></li>
+      <li><b>2</b><span>Gruppe gründen oder mit Code beitreten</span></li>
+      <li><b>3</b><span>Jeden Tag eintragen und die Serie halten</span></li>
+    </ol>
+    <div class="center"><button class="link" id="helpAuth" type="button">Wie funktioniert das genau?</button></div>
   </section>
 
   <!-- ===== Meine Gruppen ===== -->
@@ -82,9 +94,24 @@
       </div>
     </div>
     <div class="list" id="groupList"></div>
-    <p class="empty" id="groupEmpty" hidden>Du bist noch in keiner Gruppe. Tritt mit einem Code bei oder erstelle eine eigene Gruppe.</p>
+    <p class="empty" id="groupEmpty" hidden></p>
 
-    <div class="card">
+    <section class="startChoices" id="startChoices" hidden>
+      <p class="startLead">Du bist noch in keiner Gruppe. So geht es los:</p>
+      <button class="choice" id="chooseCreate" type="button">
+        <span class="choiceNum">1</span>
+        <span class="choiceText"><b>Gruppe gründen</b><small>Du legst Ziel und Strafe fest und lädst deine Freunde mit einem Code ein.</small></span>
+        <span class="choiceArrow">›</span>
+      </button>
+      <button class="choice" id="chooseJoin" type="button">
+        <span class="choiceNum">2</span>
+        <span class="choiceText"><b>Mit Code beitreten</b><small>Du hast von Freunden einen sechsstelligen Code bekommen.</small></span>
+        <span class="choiceArrow">›</span>
+      </button>
+    </section>
+    <button class="link startBack" id="startBack" type="button" hidden>‹ Zurück zur Auswahl</button>
+
+    <div class="card" id="joinCard">
       <h3 class="cardTitle">Gruppe beitreten</h3>
       <form id="joinForm" class="inline" novalidate>
         <input id="joinCode" type="text" maxlength="6" placeholder="CODE" autocapitalize="characters" autocomplete="off" aria-label="Gruppencode">
@@ -119,8 +146,18 @@
       <span class="badge" id="roleBadge" hidden></span>
     </div>
 
+    <div class="tip" id="tipBox" hidden>
+      <span id="tipText"></span>
+      <button type="button" id="tipOk">Verstanden</button>
+    </div>
+
     <!-- Tab: Heute -->
     <div class="pane" id="paneToday">
+      <section class="card startCard" id="startCard" hidden>
+        <div class="cardTitleRow"><h2 class="cardTitle">Los geht's</h2><button class="link tiny" id="startHide" type="button">Ausblenden</button></div>
+        <div class="startList" id="startList"></div>
+      </section>
+
       <section class="hero" id="heroCard">
         <div class="heroPhoto" id="heroPhoto">
           <div class="heroDay" id="heroDay"></div>
@@ -150,6 +187,7 @@
             <div class="statLine"><span><i class="dotB"></i>Liegestütze</span><b id="legP">0/50</b></div>
             <div class="heroLine" id="heroLine"></div>
             <div class="heroSub" id="heroSub"></div>
+            <button class="heroCta" id="heroCta" type="button" hidden>Jetzt eintragen</button>
           </div>
         </div>
         <div class="weekStrip" id="weekStrip"></div>
@@ -328,6 +366,11 @@
       </div>
     </div>
 
+    <div class="saveBar" id="saveBar" hidden>
+      <span><i></i>Noch nicht gespeichert</span>
+      <button type="button" id="saveBarBtn">Speichern</button>
+    </div>
+
     <nav class="tabbar" aria-label="Bereiche">
       <div class="tabbarInner">
         <button type="button" data-tab="today" class="active">
@@ -390,7 +433,23 @@
       </div>
       <button class="secondary small" id="pushToggle" type="button">Aktivieren</button>
     </div>
+    <button class="secondary helpOpen" id="helpOpen" type="button">So funktioniert's</button>
     <div class="center"><button class="link" id="profileClose" type="button">Schließen</button></div>
+  </div>
+</div>
+
+<!-- ===== Hilfe ===== -->
+<div class="modal" id="helpModal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <h3 class="cardTitle" id="helpTitle">So funktioniert's</h3>
+    <ol class="helpList">
+      <li><b>Täglich eintragen.</b> Gib deine Sit-ups und Liegestütze ein und tippe auf Speichern.</li>
+      <li><b>Ziel schaffen.</b> Erreichst du beide Tagesziele, bekommt der Tag ein Häkchen und deine Serie wächst.</li>
+      <li><b>Sonst zahlst du.</b> Verpasst du den Tag, zahlst du die Strafe deiner Gruppe. Einmal pro Woche kannst du einen Skip-Tag nehmen.</li>
+      <li><b>Aufsteigen.</b> Jede Wiederholung zählt für deinen Rang, von Rookie bis Mythos.</li>
+      <li><b>Gemeinsam.</b> Im Feed reagierst du auf die anderen, im Chat feuert ihr euch an.</li>
+    </ol>
+    <button class="primary" id="helpClose" type="button">Verstanden</button>
   </div>
 </div>
 
