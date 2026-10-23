@@ -1823,5 +1823,16 @@ function boot() {
 boot();
 
 if ("serviceWorker" in navigator && location.protocol.startsWith("http") && !CONFIG.emulator) {
-  navigator.serviceWorker.register("./sw.js").catch(() => {});
+  // Neue Versionen erkennen: Beim Zurückkehren in die App und alle 15 Minuten nach einer neuen sw.js suchen.
+  let hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadController) $("updateBar").hidden = false;
+    hadController = true;
+  });
+  $("updateBtn").addEventListener("click", () => location.reload());
+  navigator.serviceWorker.register("./sw.js").then((reg) => {
+    const check = () => reg.update().catch(() => {});
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); });
+    setInterval(check, 15 * 60 * 1000);
+  }).catch(() => {});
 }

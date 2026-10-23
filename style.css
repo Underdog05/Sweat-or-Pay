@@ -454,3 +454,12 @@ table.bilanz{ width:100%; border-collapse:collapse; font-size:14px; }
   .pane, .mascotBox{ animation:none; }
   .ringArc{ transition:none; }
 }
+/* ---------- Update-Hinweis ---------- */
+.updateBar{
+  position:fixed; left:16px; right:16px; z-index:45; max-width:448px; margin:0 auto;
+  bottom:calc(84px + env(safe-area-inset-bottom,0px));
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:12px 14px; border-radius:16px; background:var(--accent); color:var(--accent-text);
+  box-shadow:0 12px 30px -8px rgba(0,0,0,.5); font-size:14px; font-weight:600;
+}
+.updateBar button{ border:none; border-radius:100px; padding:8px 14px; background:var(--accent-text); color:var(--accent); font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; }

@@ -1,4 +1,4 @@
-const CACHE = "sweat-or-pay-v8";
+const CACHE = "sweat-or-pay-v9";
 const SHELL = ["./", "./index.html", "./style.css", "./app.js", "./config.js", "./manifest.webmanifest", "./icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
@@ -68,7 +68,8 @@ self.addEventListener("fetch", (event) => {
 
   if (url.origin !== self.location.origin) return;
   event.respondWith(
-    fetch(req)
+    // "no-cache": immer beim Server nachfragen (GitHub erlaubt sonst 10 Minuten Zwischenspeicher).
+    fetch(req, { cache: "no-cache" })
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(req, copy));
