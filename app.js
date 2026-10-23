@@ -213,7 +213,12 @@ const celQueue = [];
 let celebrating = false;
 
 function celebrateRank(kind, total, level) {
-  celQueue.push({ kind, total, level });
+  celQueue.push({ type: "rank", kind, total, level });
+  if (!celebrating) nextCelebration();
+}
+
+function celebrateAchievement(ach) {
+  celQueue.push({ type: "ach", ach, level: 6 });
   if (!celebrating) nextCelebration();
 }
 
@@ -221,12 +226,20 @@ function nextCelebration() {
   const c = celQueue.shift();
   if (!c) { celebrating = false; $("celebrate").hidden = true; return; }
   celebrating = true;
-  const r = rankFor(c.total);
-  $("celKicker").textContent = "Neuer Rang!";
-  $("celBadge").replaceChildren(rankImg(c.level, 168));
-  $("celName").textContent = r.name;
-  $("celSub").textContent = "Level " + c.level + " bei " + c.kind + " mit " + nf(c.total) + " Wiederholungen." +
-    (r.next ? " Als Nächstes wartet " + r.next.name + " bei " + nf(r.next.need) + "." : " Höher geht es nicht. Du bist eine Legende.");
+  if (c.type === "ach") {
+    $("celKicker").textContent = "Neuer Erfolg!";
+    $("celBadge").replaceChildren(achImg(c.ach.id, 168));
+    $("celName").textContent = c.ach.name;
+    $("celSub").textContent = c.ach.desc;
+  } else {
+    const r = rankFor(c.total);
+    $("celKicker").textContent = "Neuer Rang!";
+    $("celBadge").replaceChildren(rankImg(c.level, 168));
+    $("celName").textContent = r.name;
+    $("celSub").textContent = "Level " + c.level + " bei " + c.kind + " mit " + nf(c.total) + " Wiederholungen." +
+      (r.next ? " Als Nächstes wartet " + r.next.name + " bei " + nf(r.next.need) + "." : " Höher geht es nicht. Du bist eine Legende.");
+  }
+  if (navigator.vibrate) navigator.vibrate([30, 40, 60]);
   $("celebrate").hidden = false;
   requestAnimationFrame(() => {
     const b = $("celBadge").getBoundingClientRect();
@@ -338,8 +351,32 @@ async function pushCall(path, body) {
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error("push " + res.status);
+  if (!res.ok) { const err = new Error("push " + res.status); err.status = res.status; throw err; }
   return res.json();
+}
+
+const nudgeKey = (gid, uid) => "sop_nudge_" + S.user.uid + "_" + gid + "_" + uid;
+function nudgedRecently(gid, uid) {
+  try { return Date.now() - Number(localStorage.getItem(nudgeKey(gid, uid)) || 0) < 3600000; } catch (e) { return false; }
+}
+
+async function nudgeMember(m, btn) {
+  const G = S.g;
+  if (!G) return;
+  btn.disabled = true;
+  const markDone = () => {
+    try { localStorage.setItem(nudgeKey(G.id, m.uid), String(Date.now())); } catch (e) {}
+    btn.textContent = "Angestupst";
+  };
+  try {
+    const r = await pushCall("/nudge", { gid: G.id, target: m.uid });
+    markDone();
+    if (navigator.vibrate) navigator.vibrate(15);
+    flash(r.devices > 0 ? m.name + " wurde angestupst." : m.name + " hat keine Benachrichtigungen an. Schreib im Chat.", r.devices > 0 ? "ok" : "");
+  } catch (err) {
+    if (err.status === 429) { markDone(); flash(m.name + " wurde gerade erst angestupst.", ""); }
+    else { btn.disabled = false; flash("Das Anstupsen hat nicht geklappt.", "err"); }
+  }
 }
 
 async function currentSub() {
@@ -559,13 +596,35 @@ function openHome() {
   renderHome();
 }
 
+async function homeInfo(gid, grp) {
+  const today = todayStr();
+  const snap = await getDocs(query(collection(db, "groups", gid, "entries"), where("date", ">=", addDays(today, -60))));
+  const mine = new Map();
+  snap.docs.forEach((d) => {
+    const r = d.data();
+    if (r.uid === S.user.uid && typeof r.date === "string") mine.set(r.date, { situps: cleanReps(r.situps), pushups: cleanReps(r.pushups), skipped: r.skipped === true });
+  });
+  const streak = streakFrom((d) => mine.get(d) || null, grp, today);
+  const e = mine.get(today);
+  let status = { label: "Offen", cls: "pending" };
+  if (e) {
+    if (e.skipped) status = { label: "Skip-Tag", cls: "skip" };
+    else if (e.situps >= grp.situps && e.pushups >= grp.pushups) status = { label: "Geschafft", cls: "success" };
+    else status = { label: "Verloren", cls: "danger" };
+  }
+  return { streak, status };
+}
+
 async function renderHome() {
   const token = ++homeToken;
   $("groupEmpty").hidden = S.memberships.length > 0;
   const rows = await Promise.all(S.memberships.map(async (id) => {
     try {
       const s = await getDoc(doc(db, "groups", id));
-      return s.exists() ? { id, data: s.data() } : { id, stale: true };
+      if (!s.exists()) return { id, stale: true };
+      let info = null;
+      try { info = await homeInfo(id, s.data()); } catch (e) { info = null; }
+      return { id, data: s.data(), info };
     } catch (e) {
       return e.code === "permission-denied" ? { id, stale: true } : { id, offline: true };
     }
@@ -573,21 +632,35 @@ async function renderHome() {
   if (token !== homeToken) return;
   const list = $("groupList");
   list.replaceChildren();
+  let open = 0, shown = 0;
   rows.forEach((r) => {
     if (r.stale) {
       deleteDoc(doc(db, "users", S.user.uid, "groups", r.id)).catch(() => {});
       return;
     }
+    shown++;
+    if (r.info && r.info.status.cls === "pending") open++;
     const a = el("a", "listItem");
     a.href = "#g/" + r.id;
-    const left = el("div");
-    left.append(el("span", "", r.data ? r.data.name : "Gruppe (offline)"));
-    if (r.data) left.append(el("small", "", r.data.situps + " Sit-ups · " + r.data.pushups + " Liegestütze · " + r.data.penalty + " € Strafe"));
-    a.append(left);
-    if (r.data && r.data.adminUid === S.user.uid) a.append(el("span", "badge", "Admin"));
+    const tier = mascotTier(r.info ? r.info.streak : 0);
+    const img = el("img", "gMascot t" + tier);
+    img.src = "mascot/" + tier + ".jpg";
+    img.alt = "";
+    img.width = 54;
+    img.height = 54;
+    const mid = el("div", "gInfo");
+    mid.append(el("span", "", r.data ? r.data.name : "Gruppe (offline)"));
+    if (r.data) {
+      const streakTxt = r.info ? r.info.streak + (r.info.streak === 1 ? " Tag" : " Tage") + " Serie · " : "";
+      mid.append(el("small", "", streakTxt + r.data.situps + "/" + r.data.pushups + (r.data.adminUid === S.user.uid ? " · Admin" : "")));
+    }
+    a.append(img, mid);
+    if (r.info) a.append(el("span", "pill " + r.info.status.cls, r.info.status.label));
     else a.append(el("span", "", "›"));
     list.append(a);
   });
+  $("helloKicker").textContent = "Hallo " + S.name;
+  $("helloTitle").textContent = shown === 0 ? "Meine Gruppen" : open > 0 ? "Heute ist noch was offen" : "Alles erledigt. Stark!";
 }
 
 async function joinGroup(e) {
@@ -759,12 +832,11 @@ function rankImg(level, size) {
   return img;
 }
 
-function currentStreak(G, uid, today) {
-  const grp = G.group;
+function streakFrom(getEntry, grp, today) {
   let d = today, streak = 0;
-  if (!entryFor(G, uid, d)) d = addDays(d, -1);
+  if (!getEntry(d)) d = addDays(d, -1);
   for (let i = 0; i < 800; i++) {
-    const e = entryFor(G, uid, d);
+    const e = getEntry(d);
     if (!e) break;
     const done = e.situps >= grp.situps && e.pushups >= grp.pushups;
     if (!e.skipped && !done) break;
@@ -772,6 +844,10 @@ function currentStreak(G, uid, today) {
     d = addDays(d, -1);
   }
   return streak;
+}
+
+function currentStreak(G, uid, today) {
+  return streakFrom((d) => entryFor(G, uid, d), G.group, today);
 }
 
 const METRICS = {
@@ -844,6 +920,189 @@ function renderRanks(isMember) {
     return row;
   }));
   renderBoard();
+}
+
+/* ---------- Spielgefühl: Hero, Serie, Erfolge ---------- */
+
+const MARKS = { success: "✓", danger: "✕", skip: "S", pending: "·" };
+const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const RING_OUTER = 2 * Math.PI * 88;
+const RING_INNER = 2 * Math.PI * 64;
+const mascotTier = (streak) => (streak >= 30 ? 4 : streak >= 7 ? 3 : streak >= 1 ? 2 : 1);
+
+const HERO_LINES = {
+  done: ["Tagesziel geknackt. Genieß den Moment.", "Heute gehört dir. Stark!", "Die Flamme brennt heller denn je.", "Fertig! Dein Bizeps nickt zufrieden."],
+  half: ["Halbzeit. Nicht wackeln!", "Über die Hälfte, jetzt nicht nachlassen.", "Das Ziel riecht schon nach Muskelkater."],
+  start: ["Gut angefangen, weiter so.", "Die ersten Wiederholungen sind im Kasten.", "Der Anfang ist gemacht, jetzt dranbleiben."],
+  risk: ["Deine Serie wartet auf dich.", "Lass die Flamme nicht ausgehen.", "Heute zählt: Halte die Serie am Leben."],
+  fresh: ["Heute ist ein guter Tag für Tag 1.", "Dein Bizeps vermisst dich.", "Auf geht's, das Sofa kann warten."],
+  skip: ["Joker gespielt. Morgen wieder voll rein.", "Erholung gehört dazu. Bis morgen!"],
+  lost: ["Heute leider nicht. Morgen gibt's Revanche.", "Aua. Aber morgen ist ein neuer Tag."],
+  past: ["Du trägst gerade einen früheren Tag nach."],
+};
+
+function pickLine(pool, seed) {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return pool[h % pool.length];
+}
+
+function untilMidnight() {
+  const now = new Date(), end = new Date(now);
+  end.setHours(24, 0, 0, 0);
+  const min = Math.max(0, Math.floor((end - now) / 60000));
+  return Math.floor(min / 60) + " Std. " + (min % 60) + " Min.";
+}
+
+function renderHero() {
+  const G = S.g;
+  const card = $("heroCard");
+  if (!G || !G.group || !isMemberOf(G)) { card.hidden = true; return; }
+  card.hidden = false;
+  const grp = G.group, me = S.user.uid, today = todayStr(), sel = G.selectedDate;
+
+  const s = cleanReps($("situpsInput").value), p = cleanReps($("pushupsInput").value);
+  const pS = Math.min(1, s / grp.situps), pP = Math.min(1, p / grp.pushups);
+  const pct = Math.round(((pS + pP) / 2) * 100);
+  const complete = pS >= 1 && pP >= 1;
+
+  const outer = $("ringOuter"), inner = $("ringInner");
+  outer.style.strokeDasharray = RING_OUTER;
+  outer.style.strokeDashoffset = RING_OUTER * (1 - pS);
+  inner.style.strokeDasharray = RING_INNER;
+  inner.style.strokeDashoffset = RING_INNER * (1 - pP);
+  card.querySelector(".ringBox").classList.toggle("done", complete);
+  $("ringPct").textContent = complete ? "✓" : pct + "%";
+  $("ringLbl").textContent = complete ? "Geschafft" : sel === today ? "Tagesziel" : formatDate(sel);
+  $("legS").textContent = s + "/" + grp.situps;
+  $("legP").textContent = p + "/" + grp.pushups;
+
+  const streak = currentStreak(G, me, today);
+  const tier = mascotTier(streak);
+  $("mascotBox").className = "mascotBox t" + tier;
+  const want = "mascot/" + tier + ".jpg";
+  if (!$("mascotImg").src.endsWith(want)) $("mascotImg").src = want;
+  $("streakNum").textContent = String(streak);
+  $("streakLabel").textContent = streak === 1 ? "Tag Serie" : "Tage Serie";
+
+  const saved = entryFor(G, me, sel);
+  const savedDone = !!(saved && !saved.skipped && saved.situps >= grp.situps && saved.pushups >= grp.pushups);
+  let key;
+  if (sel !== today) key = "past";
+  else if (complete) key = "done";
+  else if (pct >= 50) key = "half";
+  else if (pct > 0) key = "start";
+  else if (saved && saved.skipped) key = "skip";
+  else if (saved) key = "lost";
+  else key = streak > 0 ? "risk" : "fresh";
+  $("heroLine").textContent = pickLine(HERO_LINES[key], sel + key + me);
+
+  let sub = "";
+  if (sel !== today) sub = "Eintrag für " + formatDate(sel);
+  else if (complete) sub = savedDone ? "Gespeichert. Bis morgen!" : "Jetzt nur noch speichern.";
+  else if (!(saved && saved.skipped)) sub = "Noch " + untilMidnight() + " bis Mitternacht";
+  $("heroSub").textContent = sub;
+
+  const d0 = new Date(sel + "T00:00:00");
+  d0.setDate(d0.getDate() - ((d0.getDay() + 6) % 7));
+  const monday = fmtYmd(d0);
+  $("weekStrip").replaceChildren(...WEEKDAYS.map((label, i) => {
+    const d = addDays(monday, i);
+    const future = d > today;
+    const st = future ? null : statusFor(G, me, d);
+    const cell = el("div", "wd" + (d === today ? " today" : "") + (future ? " future" : ""));
+    cell.append(el("i", "mark " + (st ? st.cls : "pending"), st ? MARKS[st.cls] : "·"), el("span", "", label));
+    return cell;
+  }));
+}
+
+const ACH = [
+  { id: 1, name: "Erster Schritt", desc: "Trage deinen ersten Tag ein.", prog: (m) => [m.entries, 1] },
+  { id: 2, name: "Ziel geknackt", desc: "Erreiche zum ersten Mal dein Tagesziel.", prog: (m) => [m.doneDays, 1] },
+  { id: 3, name: "Warmgelaufen", desc: "3 Tage Serie.", prog: (m) => [m.best, 3] },
+  { id: 4, name: "Auf Feuer", desc: "7 Tage Serie.", prog: (m) => [m.best, 7] },
+  { id: 5, name: "Unter Strom", desc: "14 Tage Serie.", prog: (m) => [m.best, 14] },
+  { id: 6, name: "Unaufhaltsam", desc: "30 Tage Serie.", prog: (m) => [m.best, 30] },
+  { id: 7, name: "Doppelte Power", desc: "Schaffe an einem Tag das Doppelte deines Ziels.", prog: (m) => [m.double ? 1 : 0, 1] },
+  { id: 8, name: "Perfekte Woche", desc: "Schaffe alle 7 Tage einer Woche.", prog: (m) => [m.perfect, 7] },
+  { id: 9, name: "Comeback", desc: "Hol dir direkt nach einem verlorenen Tag den nächsten.", prog: (m) => [m.comeback ? 1 : 0, 1] },
+  { id: 10, name: "Joker gezogen", desc: "Nutze zum ersten Mal einen Skip-Tag.", prog: (m) => [m.skipUsed ? 1 : 0, 1] },
+  { id: 11, name: "Eisenfresser", desc: "5.000 Wiederholungen insgesamt.", prog: (m) => [m.totalReps, 5000] },
+];
+
+function achImg(id, size) {
+  const img = el("img", "rimg");
+  img.src = "ach/" + id + ".jpg";
+  img.alt = "";
+  img.width = size;
+  img.height = size;
+  img.style.setProperty("--s", size + "px");
+  return img;
+}
+
+function achStats(G, uid) {
+  const grp = G.group;
+  const mine = G.entries.filter((e) => e.uid === uid).sort((a, b) => a.date.localeCompare(b.date));
+  const isDone = (e) => !e.skipped && e.situps >= grp.situps && e.pushups >= grp.pushups;
+  const m = { entries: mine.length, doneDays: 0, best: 0, double: false, perfect: 0, comeback: false, skipUsed: false, totalReps: 0 };
+  const perWeek = new Map();
+  let run = 0, prev = null;
+  mine.forEach((e) => {
+    m.totalReps += e.situps + e.pushups;
+    if (e.skipped) m.skipUsed = true;
+    const consecutive = !!prev && addDays(prev.date, 1) === e.date;
+    if (!consecutive) run = 0;
+    if (isDone(e)) {
+      m.doneDays++;
+      run++;
+      m.best = Math.max(m.best, run);
+      if (e.situps >= 2 * grp.situps && e.pushups >= 2 * grp.pushups) m.double = true;
+      if (consecutive && !prev.skipped && !isDone(prev)) m.comeback = true;
+      const wk = isoWeekKey(e.date);
+      perWeek.set(wk, (perWeek.get(wk) || 0) + 1);
+    } else if (!e.skipped) {
+      run = 0;
+    }
+    prev = e;
+  });
+  m.perfect = Math.max(0, ...perWeek.values());
+  return m;
+}
+
+function renderAchievements(G, me, member) {
+  $("achCard").hidden = !member;
+  if (!member) return;
+  const m = achStats(G, me);
+  const state = ACH.map((a) => { const [v, t] = a.prog(m); return { a, v: Math.min(v, t), t, ok: v >= t }; });
+  $("achCount").textContent = state.filter((x) => x.ok).length + " / " + ACH.length;
+  $("achGrid").replaceChildren(...state.map(({ a, v, t, ok }) => {
+    const tile = el("div", "ach" + (ok ? "" : " locked"));
+    tile.append(achImg(a.id, 72), el("div", "achName", a.name));
+    if (ok || t === 1) {
+      tile.append(el("div", "achDesc", a.desc));
+    } else {
+      const bar = el("div", "achBar");
+      const fill = el("i");
+      fill.style.width = Math.round((v / t) * 100) + "%";
+      bar.append(fill);
+      tile.append(el("div", "achDesc", a.desc), bar);
+    }
+    return tile;
+  }));
+
+  // Neue Erfolge feiern, aber erst nach dem ersten Abgleich mit dem Server (sonst feiert die App Altes).
+  if (!G.serverSynced) return;
+  const key = "sop_ach_" + me + "_" + G.id;
+  let seen = null;
+  try { seen = JSON.parse(localStorage.getItem(key)); } catch (e) { seen = null; }
+  const unlocked = state.filter((x) => x.ok).map((x) => x.a.id);
+  const store = (ids) => { try { localStorage.setItem(key, JSON.stringify(ids)); } catch (e) {} };
+  if (!Array.isArray(seen)) { store(unlocked); return; }
+  const fresh = unlocked.filter((id) => !seen.includes(id));
+  if (fresh.length) {
+    store([...new Set([...seen, ...fresh])]);
+    fresh.forEach((id) => celebrateAchievement(ACH.find((a) => a.id === id)));
+  }
 }
 
 /* ---------- Reaktionen (Feed) ---------- */
@@ -1048,6 +1307,7 @@ async function sendChat(e) {
 function stopGroup() {
   if (S.g) {
     S.g.stopped = true;
+    if (S.g.timer) clearInterval(S.g.timer);
     S.g.unsubs.forEach((u) => u());
     S.g = null;
   }
@@ -1107,8 +1367,10 @@ function startGroup(id) {
       G.entries.push(e);
       G.index.set(e.date + "|" + e.uid, e);
     });
+    if (!snap.metadata.fromCache) G.serverSynced = true;
     G.loaded.e = true; renderGroup();
   }, fail));
+  G.timer = setInterval(() => { if (S.g === G && !document.hidden && S.view === "viewGroup") renderHero(); }, 30000);
   G.unsubs.push(onSnapshot(query(collection(gref, "messages"), orderBy("createdAt", "desc"), limit(150)), (snap) => {
     if (G.stopped) return;
     G.messages = snap.docs
@@ -1146,6 +1408,7 @@ function updateBars() {
   $("pushupsBar").classList.toggle("done", p >= G.group.pushups);
   $("situpsCount").textContent = s + " / " + G.group.situps;
   $("pushupsCount").textContent = p + " / " + G.group.pushups;
+  renderHero();
 }
 
 const PANES = { today: "paneToday", feed: "paneFeed", rang: "paneRang", chat: "paneChat", gruppe: "paneGruppe" };
@@ -1222,7 +1485,17 @@ function renderGroup() {
       el("div", "personName", m.name + (m.uid === me ? " (du)" : "")),
       el("div", "personSub", e ? (e.skipped ? "Skip-Tag genutzt" : e.situps + " Sit-ups · " + e.pushups + " Liegestütze") : "Noch nichts eingetragen")
     );
-    row.append(avatarEl(m, 40, m.uid === me), main, el("span", "pill " + s.cls, s.label));
+    row.append(avatarEl(m, 40, m.uid === me), main);
+    if (PUSH && member && m.uid !== me && s.cls === "pending" && today === todayStr()) {
+      const done = nudgedRecently(G.id, m.uid);
+      const b = el("button", "nudge", done ? "Angestupst" : "Anstupsen");
+      b.type = "button";
+      b.disabled = done;
+      b.addEventListener("click", () => nudgeMember(m, b));
+      row.append(b);
+    } else {
+      row.append(el("span", "pill " + s.cls, s.label));
+    }
     return row;
   }));
 
@@ -1267,6 +1540,8 @@ function renderGroup() {
   G.stats = stats;
   G.membersView = members;
   renderRanks(member);
+  renderAchievements(G, me, member);
+  renderHero();
 
   const MARK = { success: "✓", danger: "✕", skip: "S", pending: "·" };
   const grid = $("historyGrid");
@@ -1481,8 +1756,9 @@ function wire() {
     loadForm();
     updateSkip();
   });
-  document.querySelectorAll(".stepper button").forEach((btn) => {
+  document.querySelectorAll(".stepper button, .quick button").forEach((btn) => {
     btn.addEventListener("click", () => {
+      if (navigator.vibrate) navigator.vibrate(10);
       const inp = btn.dataset.target === "situps" ? $("situpsInput") : $("pushupsInput");
       inp.value = cleanReps(cleanReps(inp.value) + parseInt(btn.dataset.delta, 10));
       updateBars();

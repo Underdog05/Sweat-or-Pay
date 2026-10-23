@@ -59,7 +59,10 @@
 
   <!-- ===== Meine Gruppen ===== -->
   <section id="viewHome" hidden>
-    <h2 class="pageTitle">Meine Gruppen</h2>
+    <div class="homeHello">
+      <div class="helloKicker" id="helloKicker">Willkommen zurück</div>
+      <h2 class="pageTitle" id="helloTitle">Meine Gruppen</h2>
+    </div>
     <div class="list" id="groupList"></div>
     <p class="empty" id="groupEmpty" hidden>Du bist noch in keiner Gruppe. Tritt mit einem Code bei oder erstelle eine eigene Gruppe.</p>
 
@@ -100,6 +103,46 @@
 
     <!-- Tab: Heute -->
     <div class="pane" id="paneToday">
+      <section class="hero" id="heroCard">
+        <div class="heroBg"></div>
+        <div class="heroInner">
+          <div class="heroRow">
+            <div class="mascotBox" id="mascotBox"><img id="mascotImg" src="mascot/1.jpg" alt="" width="88" height="88"></div>
+            <div class="heroText">
+              <div class="streakLine">
+                <svg class="flameIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c.6 3.2-1.2 4.9-2.9 6.8C7.5 10.6 6 12.4 6 15a6 6 0 0 0 12 0c0-2.1-1-3.6-2.1-4.9-.3 1.3-1 2.2-2 2.7.7-4.2-.3-8-1.9-10.8z"/></svg>
+                <b class="num" id="streakNum">0</b><span id="streakLabel">Tage Serie</span>
+              </div>
+              <div class="heroLine" id="heroLine"></div>
+              <div class="heroSub" id="heroSub"></div>
+            </div>
+          </div>
+
+          <div class="ringBox">
+            <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
+              <defs>
+                <linearGradient id="gA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#3b82f6"/></linearGradient>
+                <linearGradient id="gB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb020"/><stop offset="1" stop-color="#ff4f8b"/></linearGradient>
+                <linearGradient id="gG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe27a"/><stop offset="1" stop-color="#f2a900"/></linearGradient>
+              </defs>
+              <circle class="ringTrack" cx="100" cy="100" r="88"/>
+              <circle class="ringArc" id="ringOuter" cx="100" cy="100" r="88" stroke="url(#gA)"/>
+              <circle class="ringTrack" cx="100" cy="100" r="64"/>
+              <circle class="ringArc" id="ringInner" cx="100" cy="100" r="64" stroke="url(#gB)"/>
+            </svg>
+            <div class="ringCenter">
+              <div class="ringPct num" id="ringPct">0%</div>
+              <div class="ringLbl" id="ringLbl">Tagesziel</div>
+            </div>
+          </div>
+          <div class="ringLegend">
+            <span><i class="dotA"></i>Sit-ups <b class="num" id="legS">0/100</b></span>
+            <span><i class="dotB"></i>Liegestütze <b class="num" id="legP">0/50</b></span>
+          </div>
+          <div class="weekStrip" id="weekStrip"></div>
+        </div>
+      </section>
+
       <section class="card" id="entryCard">
         <div class="entryHead">
           <input type="date" id="dateInput" aria-label="Datum">
@@ -113,6 +156,11 @@
             <input type="number" id="situpsInput" inputmode="numeric" min="0" max="2000" value="0">
             <button type="button" data-target="situps" data-delta="5" aria-label="5 mehr">+5</button>
           </div>
+          <div class="quick">
+            <button type="button" data-target="situps" data-delta="10">+10</button>
+            <button type="button" data-target="situps" data-delta="25">+25</button>
+            <button type="button" data-target="situps" data-delta="50">+50</button>
+          </div>
           <div class="bar"><div class="bar-fill" id="situpsBar"></div></div>
         </div>
 
@@ -122,6 +170,11 @@
             <button type="button" data-target="pushups" data-delta="-5" aria-label="5 weniger">−5</button>
             <input type="number" id="pushupsInput" inputmode="numeric" min="0" max="2000" value="0">
             <button type="button" data-target="pushups" data-delta="5" aria-label="5 mehr">+5</button>
+          </div>
+          <div class="quick">
+            <button type="button" data-target="pushups" data-delta="10">+10</button>
+            <button type="button" data-target="pushups" data-delta="20">+20</button>
+            <button type="button" data-target="pushups" data-delta="25">+25</button>
           </div>
           <div class="bar"><div class="bar-fill" id="pushupsBar"></div></div>
         </div>
@@ -156,6 +209,14 @@
       <section class="card" id="myRankCard">
         <h2 class="cardTitle">Dein Rang</h2>
         <div id="myRanks"></div>
+      </section>
+
+      <section class="card" id="achCard">
+        <div class="cardTitleRow">
+          <h2 class="cardTitle">Erfolge</h2>
+          <span class="achCount num" id="achCount">0 / 11</span>
+        </div>
+        <div class="achGrid" id="achGrid"></div>
       </section>
 
       <section class="card">
