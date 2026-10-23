@@ -976,31 +976,55 @@ function renderBoard() {
   const cfg = METRICS[metric];
   const val = (m) => G.stats[m.uid][cfg.key];
   const sorted = [...G.membersView].sort((a, b) => val(b) - val(a) || a.name.localeCompare(b.name, "de"));
+  const posOf = (m) => 1 + sorted.filter((o) => val(o) > val(m)).length;
+  const withRank = metric === "situps" || metric === "pushups";
   document.querySelectorAll("#metricSeg button").forEach((b) => b.classList.toggle("active", b.dataset.metric === metric));
-  $("board").replaceChildren(...sorted.map((m) => {
-    const v = val(m);
-    const pos = 1 + sorted.filter((o) => val(o) > v).length;
-    const row = el("div", "brow" + (m.uid === me ? " me" : ""));
+  const unitOf = (v) => (cfg.unit ? (v === 1 ? " Tag" : " Tage") : "");
+  const tappable = (node, m) => {
+    node.setAttribute("role", "button");
+    node.tabIndex = 0;
+    const open = () => openPlayer(m.uid);
+    node.addEventListener("click", open);
+    node.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open(); } });
+  };
+
+  // Podest für die ersten drei, angeordnet als 2 - 1 - 3
+  const top = sorted.slice(0, 3);
+  const slots = top.length === 1 ? [top[0]] : top.length === 2 ? [top[1], top[0]] : [top[1], top[0], top[2]];
+  $("podium").hidden = top.length < 2;
+  $("podium").replaceChildren(...slots.map((m) => {
+    const pos = posOf(m), v = val(m);
+    const col = el("div", "pod p" + Math.min(pos, 3) + (v > 0 ? "" : " zero") + (m.uid === me ? " me" : ""));
+    const who = el("div", "podWho");
+    const wrap = el("div", "avWrap");
+    wrap.append(avatarEl(m, pos === 1 ? 64 : 52, m.uid === me));
+    if (withRank) wrap.append(rankImg(rankFor(v).level, pos === 1 ? 26 : 22));
+    who.append(wrap, el("div", "podName", m.name + (m.uid === me ? " (du)" : "")), el("div", "podVal num", nf(v) + unitOf(v)));
+    const block = el("div", "podBlock", String(pos));
+    col.append(who, block);
+    tappable(col, m);
+    return col;
+  }));
+
+  // Alle Plätze als Liste, das Podest steht für die ersten drei
+  const rest = $("podium").hidden ? sorted : sorted.slice(3);
+  $("board").hidden = rest.length === 0;
+  $("board").replaceChildren(...rest.map((m) => {
+    const v = val(m), pos = posOf(m);
+    const row = el("div", "brow tap" + (m.uid === me ? " me" : ""));
     const main = el("div", "bmain");
     main.append(el("div", "bname", m.name + (m.uid === me ? " (du)" : "")));
-    const rk = metric === "situps" || metric === "pushups" ? rankFor(v) : null;
+    const rk = withRank ? rankFor(v) : null;
     if (rk) main.append(rankChip(rk));
     const wrap = el("div", "avWrap");
     wrap.append(avatarEl(m, 44, m.uid === me));
     if (rk) wrap.append(rankImg(rk.level, 22));
-    const unit = cfg.unit ? (v === 1 ? " Tag" : " Tage") : "";
-    row.append(el("div", "pos" + (pos <= 3 && v > 0 ? " p" + pos : ""), String(pos)), wrap, main, el("div", "bval num", nf(v) + unit), el("span", "chev", "›"));
-    row.classList.add("tap");
-    row.setAttribute("role", "button");
-    row.tabIndex = 0;
-    const open = () => openPlayer(m.uid);
-    row.addEventListener("click", open);
-    row.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open(); } });
+    row.append(el("div", "pos" + (pos <= 3 && v > 0 ? " p" + pos : ""), String(pos)), wrap, main, el("div", "bval num", nf(v) + unitOf(v)), el("span", "chev", "›"));
+    tappable(row, m);
     return row;
   }));
   $("boardHint").textContent = cfg.hint;
 }
-
 function rankBlock(label, total) {
   const r = rankFor(total);
   const box = el("div", "myRank");
@@ -1285,7 +1309,7 @@ async function toggleReaction(entryId, date, key) {
 
 function refreshTeam() {
   const G = S.g;
-  if (G && G.membersView) renderTeam(G.membersView, isMemberOf(G));
+  if (G && G.membersView) renderTeam(G.membersView);
 }
 
 // Reaktionen unter einem Tag in der Personenansicht
@@ -1431,7 +1455,7 @@ function startGroup(id) {
   const G = {
     id, group: null, members: [], entries: [], index: new Map(), messages: [], reactions: [],
     selectedDate: todayStr(), formInit: false, stopped: false, unsubs: [], tab: "today", sec: "bilanz",
-    openPicker: null, chatScrolled: false, teamDate: todayStr(), teamUid: null, teamSec: "today",
+    openPicker: null, chatScrolled: false, teamUid: null, teamScroll: 0,
     loaded: { g: false, m: false, e: false },
   };
   S.g = G;
@@ -1445,7 +1469,6 @@ function startGroup(id) {
   $("saveFeedback").hidden = true;
   setTab("today");
   setSec("bilanz");
-  setTeamSec("today");
 
   const gref = doc(db, "groups", id);
   const fail = (err) => {
@@ -1526,7 +1549,7 @@ function updateBars() {
 }
 
 const TIPS = {
-  team: "Hier siehst du, wie es den anderen geht. Tippe auf eine Person für Statistik, vergangene Tage und Reaktionen. Unter „Rangliste“ findest du Ränge und Erfolge.",
+  team: "So stehst du im Vergleich zu den anderen. Tippe auf eine Person für Statistik, vergangene Tage und Reaktionen.",
   chat: "Schreib der Gruppe. Ein roter Punkt am Reiter zeigt dir neue Nachrichten.",
   gruppe: "Bilanz zeigt, wer wie viel schuldet. Den Einladungscode zum Einladen findest du unter „Gruppe“.",
 };
@@ -1678,81 +1701,21 @@ function renderPayChart(members, lost, grp) {
 
 const HISTORY_DAYS = 30;
 
-function renderTeam(members, member) {
-  const G = S.g, me = S.user.uid, grp = G.group, today = todayStr();
-  if (!G.teamDate || G.teamDate > today) G.teamDate = today;
-  const date = G.teamDate;
-
-  const stats = members.map((m) => statusFor(G, m.uid, date));
-  const count = (cls) => stats.filter((s) => s.cls === cls).length;
-  const parts = [[count("success"), "geschafft"], [count("skip"), "Skip"], [count("danger"), "verloren"], [count("pending"), "offen"]]
-    .filter(([n]) => n > 0).map(([n, t]) => n + " " + t);
-  $("teamDayTitle").textContent = dayLabel(date) + (date === today || date === addDays(today, -1) ? " · " + formatDate(date) : "");
-  $("teamSummary").textContent = parts.join(" · ") || "Noch niemand in der Gruppe";
-  $("teamPrev").disabled = date <= addDays(today, -HISTORY_DAYS);
-  $("teamNext").disabled = date >= today;
-
-  $("todayList").replaceChildren(...members.map((m) => {
-    const s = statusFor(G, m.uid, date), e = entryFor(G, m.uid, date);
-    const row = el("div", "person tap");
-    row.setAttribute("role", "button");
-    row.tabIndex = 0;
-    const main = el("div", "personMain");
-    main.append(
-      el("div", "personName", m.name + (m.uid === me ? " (du)" : "")),
-      el("div", "personSub", e ? (e.skipped ? "Skip-Tag genutzt" : e.situps + " Sit-ups · " + e.pushups + " Liegestütze") : (date === today ? "Noch nichts eingetragen" : "Nichts eingetragen"))
-    );
-    if (e && !e.skipped) {
-      const bars = el("div", "miniBars");
-      [["sit", e.situps / grp.situps], ["push", e.pushups / grp.pushups]].forEach(([k, v]) => {
-        const b = el("i", k);
-        const f = el("b");
-        f.style.width = Math.min(100, Math.round(v * 100)) + "%";
-        if (v >= 1) f.className = "full";
-        b.append(f);
-        bars.append(b);
-      });
-      main.append(bars);
-    }
-    row.append(avatarEl(m, 44, m.uid === me), main);
-    if (PUSH && member && m.uid !== me && s.cls === "pending" && date === today) {
-      const done = nudgedRecently(G.id, m.uid);
-      const b = el("button", "nudge", done ? "Angestupst" : "Anstupsen");
-      b.type = "button";
-      b.disabled = done;
-      b.addEventListener("click", (ev) => { ev.stopPropagation(); nudgeMember(m, b); });
-      row.append(b);
-    } else {
-      row.append(el("span", "pill " + s.cls, s.label));
-    }
-    row.append(el("span", "chev", "›"));
-    const open = () => openPlayer(m.uid);
-    row.addEventListener("click", open);
-    row.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open(); } });
-    return row;
-  }));
-
+function renderTeam(members) {
+  const G = S.g;
   const target = G.teamUid && members.find((m) => m.uid === G.teamUid);
   if (G.teamUid && !target) G.teamUid = null;
-  $("teamOverview").hidden = !!target;
-  $("teamSeg").hidden = !!target;
+  $("teamMain").hidden = !!target;
   $("teamDetail").hidden = !target;
   if (target) renderPlayer(target);
-}
-
-function setTeamSec(sec) {
-  $("teamToday").hidden = sec !== "today";
-  $("teamRang").hidden = sec !== "rang";
-  document.querySelectorAll("#teamSeg button").forEach((b) => b.classList.toggle("active", b.dataset.tsec === sec));
-  if (S.g) S.g.teamSec = sec;
 }
 
 function openPlayer(uid) {
   const G = S.g;
   if (!G) return;
-  setTeamSec("today");
+  G.teamScroll = window.scrollY;
   G.teamUid = uid;
-  renderTeam(G.membersView, isMemberOf(G));
+  renderTeam(G.membersView);
   window.scrollTo(0, 0);
 }
 
@@ -1760,10 +1723,9 @@ function closePlayer() {
   const G = S.g;
   if (!G || !G.teamUid) return;
   G.teamUid = null;
-  renderTeam(G.membersView, isMemberOf(G));
-  window.scrollTo(0, 0);
+  renderTeam(G.membersView);
+  window.scrollTo(0, G.teamScroll || 0);
 }
-
 function renderPlayer(m) {
   const G = S.g, grp = G.group, me = S.user.uid, today = todayStr();
   const st = G.stats[m.uid] || { sit: 0, push: 0, done: 0, streak: 0 };
@@ -1777,6 +1739,14 @@ function renderPlayer(m) {
   const info = el("div", "playerInfo");
   const s = statusFor(G, m.uid, today);
   info.append(el("div", "playerName", m.name + (m.uid === me ? " (du)" : "")), el("span", "pill " + s.cls, "Heute: " + s.label));
+  if (PUSH && isMemberOf(G) && m.uid !== me && s.cls === "pending") {
+    const done = nudgedRecently(G.id, m.uid);
+    const nb = el("button", "nudge", done ? "Angestupst" : "Anstupsen");
+    nb.type = "button";
+    nb.disabled = done;
+    nb.addEventListener("click", () => nudgeMember(m, nb));
+    info.append(nb);
+  }
   head.append(avatarEl(m, 72, m.uid === me), info);
   nodes.push(head);
 
@@ -1922,7 +1892,7 @@ function renderGroup() {
   });
   G.stats = stats;
   G.membersView = members;
-  renderTeam(members, member);
+  renderTeam(members);
   renderRanks(member);
   renderAchievements(G, me, member);
   renderHero();
@@ -2193,9 +2163,6 @@ function wire() {
     setTab(b.dataset.tab);
   }));
   $("teamBack").addEventListener("click", closePlayer);
-  document.querySelectorAll("#teamSeg button").forEach((b) => b.addEventListener("click", () => { setTeamSec(b.dataset.tsec); window.scrollTo(0, 0); }));
-  $("teamPrev").addEventListener("click", () => { const G = S.g; if (!G) return; G.teamDate = addDays(G.teamDate, -1); renderTeam(G.membersView, isMemberOf(G)); });
-  $("teamNext").addEventListener("click", () => { const G = S.g; if (!G) return; G.teamDate = addDays(G.teamDate, 1); renderTeam(G.membersView, isMemberOf(G)); });
   document.querySelectorAll("#groupSeg button").forEach((b) => b.addEventListener("click", () => setSec(b.dataset.sec)));
   document.querySelectorAll("#metricSeg button").forEach((b) => b.addEventListener("click", () => {
     if (!S.g) return;

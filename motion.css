@@ -342,3 +342,24 @@ button.primary.isBusy, .saveBar button.isBusy{ --spin:var(--cta-text); }
 .payRow b{ font:700 18px "Barlow Condensed",sans-serif; }
 .payRow small{ width:38px; text-align:right; font-size:12px; color:var(--text-dim); }
 @media (prefers-reduced-motion: reduce){ .donutSeg{ animation:none; } }
+
+/* ---------- Rangliste mit Podest ---------- */
+.podium{ display:flex; align-items:flex-end; justify-content:center; gap:8px; margin:6px 0 16px; padding-top:6px; }
+.pod{ flex:1; max-width:120px; min-width:0; display:flex; flex-direction:column; align-items:center; cursor:pointer; text-align:center; transition:transform .4s cubic-bezier(.3,1.6,.5,1); }
+.pod:active{ transform:scale(.95); }
+.podWho{ display:flex; flex-direction:column; align-items:center; gap:5px; padding:0 2px 10px; width:100%; min-width:0; }
+.podName{ width:100%; font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.podVal{ font:700 20px/1 "Barlow Condensed",sans-serif; color:var(--text-dim); }
+.podBlock{ width:100%; display:grid; place-items:start center; padding-top:8px; border-radius:12px 12px 0 0; border:1px solid var(--border); border-bottom:none; font:700 34px/1 "Barlow Condensed",sans-serif; background:linear-gradient(180deg, var(--surface-2), transparent); color:var(--text-dim); }
+.pod.p1 .podBlock{ height:92px; color:#ffc857; border-color:rgba(255,200,87,.5); background:linear-gradient(180deg, rgba(255,200,87,.26), rgba(255,200,87,.02)); text-shadow:0 0 16px rgba(255,200,87,.5); }
+.pod.p2 .podBlock{ height:68px; color:#d6dde2; border-color:rgba(214,221,226,.4); background:linear-gradient(180deg, rgba(214,221,226,.18), rgba(214,221,226,.01)); }
+.pod.p3 .podBlock{ height:50px; color:#e0925a; border-color:rgba(224,146,90,.45); background:linear-gradient(180deg, rgba(224,146,90,.2), rgba(224,146,90,.01)); }
+.pod.p1 .podVal{ color:var(--text); }
+.pod.p1 .avatar{ box-shadow:0 0 0 2px #ffc857, 0 0 22px rgba(255,200,87,.45); }
+.pod.me .podName{ color:var(--accent); }
+.pod.zero .podBlock{ color:var(--text-dim); text-shadow:none; }
+.board .brow.tap{ padding:12px 8px; }
+
+.podium{ border-bottom:1px solid var(--border); margin-bottom:6px; }
+.podium:not([hidden]) + .board{ margin-top:4px; }
+
