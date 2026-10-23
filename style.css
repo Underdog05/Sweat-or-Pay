@@ -458,3 +458,37 @@ table.bilanz{ width:100%; border-collapse:collapse; font-size:15px; }
   .pane, .celebrateCard{ animation:none; }
   .ringArc{ transition:none; }
 }
+
+/* ---------- Startbildschirm ---------- */
+.splash{
+  position:fixed; inset:0; z-index:300; background:#0e1110; color:#eeeae0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px;
+  transition:opacity .6s ease, visibility .6s ease; cursor:pointer;
+}
+.splash::after{
+  content:""; position:absolute; inset:0; pointer-events:none; opacity:.1; mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.splash.leave{ opacity:0; visibility:hidden; }
+.splashLogo{ width:124px; height:124px; overflow:visible; transition:transform .7s ease; }
+.splash.leave .splashLogo{ transform:scale(1.08); }
+.splashLogo .bar, .splashLogo .strike{ stroke-width:5.2; stroke-dasharray:1; stroke-dashoffset:1; animation:splashDraw .5s cubic-bezier(.4,0,.2,1) forwards; }
+.splashLogo .bar{ stroke:#eeeae0; }
+.splashLogo .bar:nth-of-type(1){ animation-delay:.12s; }
+.splashLogo .bar:nth-of-type(2){ animation-delay:.24s; }
+.splashLogo .bar:nth-of-type(3){ animation-delay:.36s; }
+.splashLogo .bar:nth-of-type(4){ animation-delay:.48s; }
+.splashLogo .strike{ stroke:#c9a45c; animation-delay:.72s; animation-duration:.45s; }
+@keyframes splashDraw{ to{ stroke-dashoffset:0; } }
+.splashWord{ font:700 24px "Barlow Condensed",sans-serif; text-transform:uppercase; letter-spacing:.32em; padding-left:.32em; opacity:0; animation:splashWord .8s ease .95s forwards; }
+.splashWord em{ font-style:normal; color:#c9a45c; }
+@keyframes splashWord{ from{ opacity:0; letter-spacing:.6em; } to{ opacity:1; letter-spacing:.32em; } }
+.splashLine{ width:0; height:1px; background:#c9a45c; animation:splashLine .7s ease 1.15s forwards; }
+@keyframes splashLine{ to{ width:64px; } }
+.splashTag{ font:600 13px "Barlow Condensed",sans-serif; letter-spacing:.24em; text-transform:uppercase; color:#98a099; opacity:0; animation:splashFade .7s ease 1.3s forwards; }
+@keyframes splashFade{ to{ opacity:1; } }
+@media (prefers-reduced-motion: reduce){
+  .splashLogo .bar, .splashLogo .strike{ animation:none; stroke-dashoffset:0; }
+  .splashWord, .splashTag{ animation:none; opacity:1; }
+  .splashLine{ animation:none; width:64px; }
+}

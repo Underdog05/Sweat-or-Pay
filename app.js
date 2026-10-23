@@ -84,6 +84,7 @@ let db = null;
 /* ---------- ui helpers ---------- */
 
 function show(view) {
+  endSplash();
   ["viewAuth", "viewHome", "viewGroup", "viewAdmin"].forEach((v) => { $(v).hidden = v !== view; });
   $("topbar").hidden = view === "viewAuth";
   if (S.view !== view) window.scrollTo(0, 0);
@@ -253,6 +254,29 @@ function nextCelebration() {
   });
 }
 
+/* ---------- Startbildschirm ---------- */
+
+const splashStart = performance.now();
+let splashQueued = false;
+
+function endSplash(force) {
+  const node = document.getElementById("splash");
+  if (!node || (splashQueued && !force)) return;
+  splashQueued = true;
+  const minShow = reduceMotion() ? 500 : 1800;
+  const wait = force ? 0 : Math.max(0, minShow - (performance.now() - splashStart));
+  setTimeout(() => {
+    node.classList.add("leave");
+    setTimeout(() => node.remove(), 800);
+  }, wait);
+}
+
+(function initSplash() {
+  const node = document.getElementById("splash");
+  if (!node) return;
+  node.addEventListener("click", () => { if (splashQueued) endSplash(true); });
+  setTimeout(() => endSplash(true), 7000);
+})();
 /* ---------- Profil ---------- */
 
 function openProfile() {

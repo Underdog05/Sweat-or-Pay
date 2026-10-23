@@ -14,9 +14,22 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>#splash{position:fixed;inset:0;background:#0e1110;z-index:300}</style>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div class="splash" id="splash" aria-hidden="true">
+  <svg class="splashLogo" viewBox="16 16 68 68" fill="none" stroke-linecap="round">
+    <path class="bar" pathLength="1" d="M34.25 30V70"/>
+    <path class="bar" pathLength="1" d="M44.75 30V70"/>
+    <path class="bar" pathLength="1" d="M55.25 30V70"/>
+    <path class="bar" pathLength="1" d="M65.75 30V70"/>
+    <path class="strike" pathLength="1" d="M26 66L74 34"/>
+  </svg>
+  <div class="splashWord">Sweat <em>or</em> Pay</div>
+  <div class="splashLine"></div>
+  <div class="splashTag">Jeden Tag. Gemeinsam. Sonst zahlst du.</div>
+</div>
 <canvas id="fx" aria-hidden="true"></canvas>
 <div id="app">
 
