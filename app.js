@@ -989,7 +989,13 @@ function renderBoard() {
     wrap.append(avatarEl(m, 44, m.uid === me));
     if (rk) wrap.append(rankImg(rk.level, 22));
     const unit = cfg.unit ? (v === 1 ? " Tag" : " Tage") : "";
-    row.append(el("div", "pos" + (pos <= 3 && v > 0 ? " p" + pos : ""), String(pos)), wrap, main, el("div", "bval num", nf(v) + unit));
+    row.append(el("div", "pos" + (pos <= 3 && v > 0 ? " p" + pos : ""), String(pos)), wrap, main, el("div", "bval num", nf(v) + unit), el("span", "chev", "›"));
+    row.classList.add("tap");
+    row.setAttribute("role", "button");
+    row.tabIndex = 0;
+    const open = () => openPlayer(m.uid);
+    row.addEventListener("click", open);
+    row.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open(); } });
     return row;
   }));
   $("boardHint").textContent = cfg.hint;
@@ -1234,7 +1240,7 @@ function renderAchievements(G, me, member) {
   }
 }
 
-/* ---------- Reaktionen (Feed) ---------- */
+/* ---------- Reaktionen ---------- */
 
 const PHRASES = [
   { key: "hauen", tone: "win", text: "Du hast heute mal richtig reingehauen" },
@@ -1277,76 +1283,53 @@ async function toggleReaction(entryId, date, key) {
   }
 }
 
-function renderFeed() {
+function refreshTeam() {
   const G = S.g;
-  if (!G || !G.loaded.m || !G.loaded.e || !G.group) return;
-  const me = S.user.uid;
-  const cutoff = addDays(todayStr(), -13);
-  const byUid = new Map(G.members.map((m) => [m.uid, m]));
-  const items = G.entries
-    .filter((e) => byUid.has(e.uid) && e.date >= cutoff)
-    .sort((a, b) => b.date.localeCompare(a.date) || byUid.get(a.uid).name.localeCompare(byUid.get(b.uid).name, "de"));
-  $("feedEmpty").hidden = items.length > 0;
-
-  const byEntry = new Map();
-  G.reactions.forEach((r) => {
-    if (!PHRASE_BY_KEY.has(r.key)) return;
-    if (!byEntry.has(r.entryId)) byEntry.set(r.entryId, []);
-    byEntry.get(r.entryId).push(r);
-  });
-
-  $("feedList").replaceChildren(...items.map((e) => {
-    const m = byUid.get(e.uid);
-    const entryId = e.date + "_" + e.uid;
-    const st = statusFor(G, e.uid, e.date);
-    const card = el("div", "act");
-
-    const head = el("div", "actHead");
-    const main = el("div", "actMain");
-    main.append(el("div", "actName", m.name + (e.uid === me ? " (du)" : "")), el("div", "actDate", dayLabel(e.date)));
-    head.append(avatarEl(m, 40, e.uid === me), main, el("span", "pill " + st.cls, st.label));
-
-    const body = el("div", "actBody", e.skipped ? "Hat den Skip-Tag genutzt." : nf(e.situps) + " Sit-ups und " + nf(e.pushups) + " Liegestütze");
-
-    const reacts = el("div", "reacts");
-    const mine = new Set();
-    const groups = new Map();
-    (byEntry.get(entryId) || []).forEach((r) => {
-      if (!groups.has(r.key)) groups.set(r.key, []);
-      groups.get(r.key).push(r.uid);
-      if (r.uid === me) mine.add(r.key);
-    });
-    PHRASES.filter((p) => groups.has(p.key)).forEach((p) => {
-      const uids = groups.get(p.key);
-      const chip = el("button", "chip" + (mine.has(p.key) ? " mine" : ""), p.text + " ");
-      chip.type = "button";
-      chip.title = uids.map((u) => (byUid.get(u) ? byUid.get(u).name : "?")).join(", ");
-      chip.append(el("b", "", String(uids.length)));
-      chip.addEventListener("click", () => toggleReaction(entryId, e.date, p.key));
-      reacts.append(chip);
-    });
-    const add = el("button", "chip add", G.openPicker === entryId ? "Schließen" : "Reagieren");
-    add.type = "button";
-    add.addEventListener("click", () => { G.openPicker = G.openPicker === entryId ? null : entryId; renderFeed(); });
-    reacts.append(add);
-
-    card.append(head, body, reacts);
-
-    if (G.openPicker === entryId) {
-      const tone = toneFor(st.cls);
-      const picker = el("div", "picker");
-      PHRASES.filter((p) => p.tone === tone || p.tone === "any").forEach((p) => {
-        const b = el("button", "chip" + (mine.has(p.key) ? " mine" : ""), p.text);
-        b.type = "button";
-        b.addEventListener("click", () => { G.openPicker = null; toggleReaction(entryId, e.date, p.key); renderFeed(); });
-        picker.append(b);
-      });
-      card.append(picker);
-    }
-    return card;
-  }));
+  if (G && G.membersView) renderTeam(G.membersView, isMemberOf(G));
 }
 
+// Reaktionen unter einem Tag in der Personenansicht
+function reactBlock(G, m, e, st, byEntry) {
+  const me = S.user.uid;
+  const entryId = e.date + "_" + e.uid;
+  const byUid = new Map(G.members.map((x) => [x.uid, x]));
+  const wrap = el("div", "reactWrap");
+  const reacts = el("div", "reacts");
+  const mine = new Set();
+  const groups = new Map();
+  (byEntry.get(entryId) || []).forEach((r) => {
+    if (!groups.has(r.key)) groups.set(r.key, []);
+    groups.get(r.key).push(r.uid);
+    if (r.uid === me) mine.add(r.key);
+  });
+  PHRASES.filter((p) => groups.has(p.key)).forEach((p) => {
+    const uids = groups.get(p.key);
+    const chip = el("button", "chip" + (mine.has(p.key) ? " mine" : ""), p.text + " ");
+    chip.type = "button";
+    chip.title = uids.map((u) => (byUid.get(u) ? byUid.get(u).name : "?")).join(", ");
+    chip.append(el("b", "", String(uids.length)));
+    chip.addEventListener("click", () => toggleReaction(entryId, e.date, p.key));
+    reacts.append(chip);
+  });
+  const add = el("button", "chip add", G.openPicker === entryId ? "Schließen" : "Reagieren");
+  add.type = "button";
+  add.addEventListener("click", () => { G.openPicker = G.openPicker === entryId ? null : entryId; refreshTeam(); });
+  reacts.append(add);
+  wrap.append(reacts);
+
+  if (G.openPicker === entryId) {
+    const tone = toneFor(st.cls);
+    const picker = el("div", "picker");
+    PHRASES.filter((p) => p.tone === tone || p.tone === "any").forEach((p) => {
+      const b = el("button", "chip" + (mine.has(p.key) ? " mine" : ""), p.text);
+      b.type = "button";
+      b.addEventListener("click", () => { G.openPicker = null; toggleReaction(entryId, e.date, p.key); refreshTeam(); });
+      picker.append(b);
+    });
+    wrap.append(picker);
+  }
+  return wrap;
+}
 /* ---------- Chat ---------- */
 
 const chatSeenKey = (id) => "sop_chat_seen_" + (S.user ? S.user.uid : "x") + "_" + id;
@@ -1448,7 +1431,7 @@ function startGroup(id) {
   const G = {
     id, group: null, members: [], entries: [], index: new Map(), messages: [], reactions: [],
     selectedDate: todayStr(), formInit: false, stopped: false, unsubs: [], tab: "today", sec: "bilanz",
-    openPicker: null, chatScrolled: false, teamDate: todayStr(), teamUid: null,
+    openPicker: null, chatScrolled: false, teamDate: todayStr(), teamUid: null, teamSec: "today",
     loaded: { g: false, m: false, e: false },
   };
   S.g = G;
@@ -1462,6 +1445,7 @@ function startGroup(id) {
   $("saveFeedback").hidden = true;
   setTab("today");
   setSec("bilanz");
+  setTeamSec("today");
 
   const gref = doc(db, "groups", id);
   const fail = (err) => {
@@ -1511,7 +1495,7 @@ function startGroup(id) {
   G.unsubs.push(onSnapshot(query(collection(gref, "reactions"), where("date", ">=", addDays(todayStr(), -14))), (snap) => {
     if (G.stopped) return;
     G.reactions = snap.docs.map((d) => d.data()).filter((r) => typeof r.entryId === "string" && typeof r.key === "string" && typeof r.uid === "string");
-    renderFeed();
+    refreshTeam();
   }, () => {}));
 }
 
@@ -1542,9 +1526,7 @@ function updateBars() {
 }
 
 const TIPS = {
-  team: "Hier siehst du, wie es den anderen heute geht. Tippe auf eine Person für Statistik und vergangene Tage.",
-  feed: "Hier siehst du, was die anderen geschafft haben. Tippe auf „Reagieren“ und schick ihnen einen Spruch.",
-  rang: "Jede Wiederholung zählt für deinen Rang. Sammle Erfolge und steige bis Mythos auf.",
+  team: "Hier siehst du, wie es den anderen geht. Tippe auf eine Person für Statistik, vergangene Tage und Reaktionen. Unter „Rangliste“ findest du Ränge und Erfolge.",
   chat: "Schreib der Gruppe. Ein roter Punkt am Reiter zeigt dir neue Nachrichten.",
   gruppe: "Bilanz zeigt, wer wie viel schuldet. Den Einladungscode zum Einladen findest du unter „Gruppe“.",
 };
@@ -1594,7 +1576,7 @@ function renderStartCard(G, me, member) {
     return b;
   }));
 }
-const PANES = { today: "paneToday", team: "paneTeam", feed: "paneFeed", rang: "paneRang", chat: "paneChat", gruppe: "paneGruppe" };
+const PANES = { today: "paneToday", team: "paneTeam", chat: "paneChat", gruppe: "paneGruppe" };
 function setTab(tab) {
   if (S.g) S.g.tab = tab;
   Object.keys(PANES).forEach((t) => { $(PANES[t]).hidden = t !== tab; });
@@ -1699,13 +1681,22 @@ function renderTeam(members, member) {
   const target = G.teamUid && members.find((m) => m.uid === G.teamUid);
   if (G.teamUid && !target) G.teamUid = null;
   $("teamOverview").hidden = !!target;
+  $("teamSeg").hidden = !!target;
   $("teamDetail").hidden = !target;
   if (target) renderPlayer(target);
+}
+
+function setTeamSec(sec) {
+  $("teamToday").hidden = sec !== "today";
+  $("teamRang").hidden = sec !== "rang";
+  document.querySelectorAll("#teamSeg button").forEach((b) => b.classList.toggle("active", b.dataset.tsec === sec));
+  if (S.g) S.g.teamSec = sec;
 }
 
 function openPlayer(uid) {
   const G = S.g;
   if (!G) return;
+  setTeamSec("today");
   G.teamUid = uid;
   renderTeam(G.membersView, isMemberOf(G));
   window.scrollTo(0, 0);
@@ -1773,8 +1764,15 @@ function renderPlayer(m) {
 
   const hist = el("section", "card");
   hist.append(el("h2", "cardTitle", "Vergangene Tage"));
+  hist.append(el("p", "hint tightHint", "Tippe unter einem Tag auf „Reagieren“ und schick einen Spruch."));
   const firstDate = mine.reduce((min, e) => (e.date < min ? e.date : min), today);
   const list = el("div", "dayList");
+  const byEntry = new Map();
+  G.reactions.forEach((r) => {
+    if (!PHRASE_BY_KEY.has(r.key)) return;
+    if (!byEntry.has(r.entryId)) byEntry.set(r.entryId, []);
+    byEntry.get(r.entryId).push(r);
+  });
   for (let i = 0; i < HISTORY_DAYS; i++) {
     const d = addDays(today, -i);
     if (d < firstDate) break;
@@ -1792,7 +1790,10 @@ function renderPlayer(m) {
       vals.append(el("span", "vNone", e ? "Skip-Tag genutzt" : "Nichts eingetragen"));
     }
     row.append(date, vals, el("span", "pill " + ds.cls, ds.label));
-    list.append(row);
+    const item = el("div", "dayItem");
+    item.append(row);
+    if (e) item.append(reactBlock(G, m, e, ds, byEntry));
+    list.append(item);
   }
   if (!list.childNodes.length) list.append(el("p", "empty", m.name + " hat noch nichts eingetragen."));
   hist.append(list);
@@ -1921,7 +1922,6 @@ function renderGroup() {
   }
   $("leaveBtn").hidden = !(member && !isGAdmin);
 
-  renderFeed();
   renderChat();
   renderStartCard(G, me, member);
   updateSaveBar();
@@ -2138,6 +2138,7 @@ function wire() {
     setTab(b.dataset.tab);
   }));
   $("teamBack").addEventListener("click", closePlayer);
+  document.querySelectorAll("#teamSeg button").forEach((b) => b.addEventListener("click", () => { setTeamSec(b.dataset.tsec); window.scrollTo(0, 0); }));
   $("teamPrev").addEventListener("click", () => { const G = S.g; if (!G) return; G.teamDate = addDays(G.teamDate, -1); renderTeam(G.membersView, isMemberOf(G)); });
   $("teamNext").addEventListener("click", () => { const G = S.g; if (!G) return; G.teamDate = addDays(G.teamDate, 1); renderTeam(G.membersView, isMemberOf(G)); });
   document.querySelectorAll("#groupSeg button").forEach((b) => b.addEventListener("click", () => setSec(b.dataset.sec)));
