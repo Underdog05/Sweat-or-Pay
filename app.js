@@ -1566,7 +1566,9 @@ function isDirty() {
 }
 
 function updateSaveBar() {
-  $("saveBar").hidden = !(S.view === "viewGroup" && S.g && S.g.tab === "today" && isDirty());
+  const dirty = isDirty();
+  $("saveBar").hidden = !(S.view === "viewGroup" && S.g && S.g.tab === "today" && dirty);
+  $("saveBtn").classList.toggle("attn", dirty);
 }
 
 function renderStartCard(G, me, member) {
@@ -1803,7 +1805,10 @@ async function saveEntry() {
   const goalNow = !data.skipped && data.situps >= grp.situps && data.pushups >= grp.pushups;
 
   const fb = $("saveFeedback");
+  const ui = window.SOPUI;
   $("saveBtn").disabled = true;
+  $("saveBarBtn").disabled = true;
+  if (ui) { ui.busy($("saveBtn"), true); ui.busy($("saveBarBtn"), true); }
   fb.hidden = true;
   try {
     const slow = new Promise((resolve) => setTimeout(() => resolve("slow"), 8000));
@@ -1812,6 +1817,7 @@ async function saveEntry() {
       setMsg(fb, "Wird gespeichert, sobald du wieder online bist.", true);
     } else {
       setMsg(fb, goalNow && !goalWas ? "Gespeichert ✓ Tagesziel geschafft!" : "Gespeichert ✓", true);
+      if (ui) { ui.haptic("success"); ui.done($("saveBtn"), goalNow && !goalWas ? "Ziel geschafft ✓" : "Gespeichert ✓"); }
       let ranked = false;
       [["Sit-ups", st.sit, after.sit], ["Liegestütze", st.push, after.push]].forEach(([kind, before, now]) => {
         const lv = rankFor(now).level;
@@ -1826,8 +1832,11 @@ async function saveEntry() {
     }
   } catch (err) {
     setMsg(fb, "Speichern hat nicht geklappt. Prüfe deine Verbindung.");
+    if (ui) ui.fail($("saveBtn"));
   } finally {
     $("saveBtn").disabled = false;
+    $("saveBarBtn").disabled = false;
+    if (ui) { ui.busy($("saveBtn"), false); ui.busy($("saveBarBtn"), false); }
   }
 }
 
@@ -1941,10 +1950,17 @@ function wire() {
   });
   document.querySelectorAll(".stepper button, .quick button").forEach((btn) => {
     btn.addEventListener("click", () => {
-      if (navigator.vibrate) navigator.vibrate(10);
+      const ui = window.SOPUI;
       const inp = btn.dataset.target === "situps" ? $("situpsInput") : $("pushupsInput");
-      inp.value = cleanReps(cleanReps(inp.value) + parseInt(btn.dataset.delta, 10));
+      const delta = parseInt(btn.dataset.delta, 10);
+      const goal = S.g && S.g.group ? S.g.group[btn.dataset.target] : 0;
+      const before = cleanReps(inp.value);
+      inp.value = cleanReps(before + delta);
       updateBars();
+      if (!ui) return;
+      ui.haptic("step");
+      ui.bump(inp, delta);
+      if (goal && before < goal && cleanReps(inp.value) >= goal) ui.goalHit($(btn.dataset.target === "situps" ? "situpsBar" : "pushupsBar"));
     });
   });
   $("situpsInput").addEventListener("input", updateBars);

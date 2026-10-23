@@ -1,0 +1,159 @@
+/* Sweat or Pay: Tiefe, Licht und Rückmeldung. Wird nach style.css geladen. */
+:root{
+  --hi:rgba(255,255,255,.62); --lift:0 1px 2px rgba(40,30,10,.05), 0 20px 36px -24px rgba(50,38,12,.38);
+  --amb1:rgba(138,104,40,.12); --amb2:rgba(83,105,122,.10);
+  --btn-grad:linear-gradient(180deg,#262d2a 0%,#111513 100%);
+  --btn-shadow:0 10px 22px -12px rgba(21,25,23,.7), inset 0 1px 0 rgba(255,255,255,.14);
+  --spin:var(--text);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --hi:rgba(255,255,255,.055); --lift:0 1px 2px rgba(0,0,0,.4), 0 22px 38px -22px rgba(0,0,0,.85);
+    --amb1:rgba(201,164,92,.11); --amb2:rgba(110,170,150,.075);
+    --btn-grad:linear-gradient(180deg,#f7f3e9 0%,#ddd7c6 100%);
+    --btn-shadow:0 10px 26px -12px rgba(201,164,92,.55), inset 0 1px 0 rgba(255,255,255,.7);
+  }
+}
+
+/* ---------- Licht im Hintergrund ---------- */
+html::before{
+  content:""; position:fixed; inset:-20vmax; z-index:-1; pointer-events:none;
+  background:
+    radial-gradient(38vmax 38vmax at 14% 18%, var(--amb1), transparent 70%),
+    radial-gradient(44vmax 44vmax at 92% 72%, var(--amb2), transparent 70%);
+  animation:drift 42s ease-in-out infinite alternate;
+}
+@keyframes drift{ from{ transform:translate3d(-2vmax,-1vmax,0) scale(1); } to{ transform:translate3d(3vmax,2vmax,0) scale(1.08); } }
+
+/* ---------- Karten mit Tiefe ---------- */
+.card, .hero, .listItem, .choice, .sheet{
+  background-image:linear-gradient(180deg, var(--hi), transparent 46%);
+  box-shadow:inset 0 1px 0 var(--hi), var(--lift);
+}
+.card, .listItem, .choice{ transition:transform .35s cubic-bezier(.3,1.5,.5,1), border-color .25s, box-shadow .25s, background-color .25s; }
+.listItem:hover, .choice:hover{ border-color:var(--accent); }
+.pane > .card, .pane > .hero, .pane > .tip{ animation:rise .45s cubic-bezier(.2,.9,.3,1) both; }
+.pane > :nth-child(2){ animation-delay:.05s; }
+.pane > :nth-child(3){ animation-delay:.1s; }
+.pane > :nth-child(4){ animation-delay:.15s; }
+.pane > :nth-child(5){ animation-delay:.2s; }
+.pane > :nth-child(n+6){ animation-delay:.25s; }
+.field input:focus, .inline input:focus, .chatForm input:focus{ box-shadow:0 0 0 4px var(--accent-soft); transition:box-shadow .2s; }
+
+/* ---------- Alle Buttons: federnder Druck + Welle ---------- */
+button:not(.link):not(.whoBadge), .listItem, .choice{ position:relative; overflow:hidden; isolation:isolate; -webkit-user-select:none; user-select:none; touch-action:manipulation; }
+button, .listItem, .choice{ transition:transform .4s cubic-bezier(.3,1.6,.5,1), background-color .2s, border-color .2s, color .2s, box-shadow .25s, opacity .2s; }
+button:not(:disabled):not(.link):active, .listItem:active, .choice:active{ transform:scale(.955); transition-duration:.07s; }
+.stepper button:not(:disabled):not(.link):active{ transform:scale(.9); }
+.quick button:not(:disabled):not(.link):active{ transform:scale(.92); }
+.tabbar button:not(:disabled):not(.link):active{ transform:scale(.9); }
+.ripple{
+  position:absolute; z-index:-1; pointer-events:none; border-radius:50%; background:currentColor; opacity:.2;
+  width:var(--d); height:var(--d); left:calc(var(--x) - var(--d) / 2); top:calc(var(--y) - var(--d) / 2);
+  transform:scale(0); animation:ripple .65s cubic-bezier(.2,.7,.3,1) forwards;
+}
+.tabbar .ripple, .tip .ripple{ z-index:0; }
+@keyframes ripple{ 0%{ transform:scale(0); opacity:.26; } 100%{ transform:scale(1); opacity:0; } }
+
+/* Hauptbutton: leicht gewölbt, mit warmem Schein */
+button.primary, .saveBar button, .heroCta{ background:var(--btn-grad); box-shadow:var(--btn-shadow); }
+button.primary:not(:disabled):hover{ box-shadow:0 12px 28px -10px var(--accent), inset 0 1px 0 rgba(255,255,255,.4); }
+button.primary:disabled{ opacity:1; }
+button.primary:disabled:not(.isBusy){ opacity:.5; }
+.chatForm .primary, .inline .primary{ box-shadow:var(--btn-shadow); }
+
+/* Glanz läuft über den Speichern-Button, wenn es etwas zu speichern gibt */
+button.attn::before, .saveBar button::before, .heroCta::before{
+  content:""; position:absolute; top:0; bottom:0; left:-70%; width:46%; z-index:-1; pointer-events:none;
+  background:linear-gradient(100deg, transparent, rgba(255,255,255,.55), transparent); transform:skewX(-20deg);
+  animation:sheen 3s ease-in-out infinite;
+}
+.heroCta::before, .saveBar button::before{ animation-duration:3.4s; }
+@keyframes sheen{ 0%,55%{ left:-70%; } 100%{ left:130%; } }
+
+/* ---------- Laden, Erfolg, Fehler ---------- */
+button.isBusy{ color:transparent !important; pointer-events:none; transition-property:transform, box-shadow; }
+button.isBusy > *{ opacity:0; }
+button.isBusy::after{
+  content:""; position:absolute; left:50%; top:50%; width:20px; height:20px; margin:-10px 0 0 -10px; z-index:1;
+  border-radius:50%; border:2.5px solid var(--spin); border-right-color:transparent; animation:spin .7s linear infinite;
+}
+button.primary.isBusy, .saveBar button.isBusy{ --spin:var(--btn-text); }
+@keyframes spin{ to{ transform:rotate(360deg); } }
+button.isDone{ background:var(--success) !important; background-image:none !important; color:var(--bg) !important; border-color:transparent !important; box-shadow:0 10px 24px -10px var(--success) !important; }
+button.isDone::before{ display:none !important; }
+.donePop{ animation:donePop .55s cubic-bezier(.3,1.6,.5,1); }
+@keyframes donePop{ 0%{ transform:scale(.92); } 55%{ transform:scale(1.045); } 100%{ transform:scale(1); } }
+.shake{ animation:shake .45s ease; }
+@keyframes shake{ 0%,100%{ transform:none; } 20%{ transform:translateX(-7px); } 40%{ transform:translateX(6px); } 60%{ transform:translateX(-4px); } 80%{ transform:translateX(3px); } }
+.pop{ animation:chipPop .42s cubic-bezier(.3,1.7,.5,1); }
+@keyframes chipPop{ 0%{ transform:scale(.8); } 60%{ transform:scale(1.14); } 100%{ transform:scale(1); } }
+
+/* ---------- Zähler: Zahl federt, Wert schwebt auf ---------- */
+.stepper input.bump{ animation:bumpUp .38s cubic-bezier(.3,1.7,.5,1); }
+.stepper input.bumpDown{ animation:bumpDown .32s ease-out; }
+@keyframes bumpUp{ 0%{ transform:scale(.86); color:var(--accent); } 55%{ transform:scale(1.14); color:var(--accent); } 100%{ transform:scale(1); } }
+@keyframes bumpDown{ 0%{ transform:scale(1.1); } 100%{ transform:scale(1); } }
+.floatTxt{
+  position:fixed; z-index:80; pointer-events:none; transform:translate(-50%,0);
+  font:700 28px/1 "Barlow Condensed",sans-serif; letter-spacing:.04em; text-shadow:0 2px 12px rgba(0,0,0,.35);
+  animation:floatUp .95s cubic-bezier(.2,.8,.3,1) forwards;
+}
+.floatTxt.pos{ color:var(--accent); }
+.floatTxt.neg{ color:var(--text-dim); animation-name:floatDown; }
+.floatTxt.goal{ color:var(--success); font-size:22px; letter-spacing:.14em; text-transform:uppercase; }
+@keyframes floatUp{ 0%{ opacity:0; transform:translate(-50%,10px) scale(.7); } 20%{ opacity:1; transform:translate(-50%,0) scale(1.1); } 100%{ opacity:0; transform:translate(-50%,-54px) scale(1); } }
+@keyframes floatDown{ 0%{ opacity:0; transform:translate(-50%,-6px); } 25%{ opacity:1; } 100%{ opacity:0; transform:translate(-50%,28px); } }
+.bar{ position:relative; }
+.bar-fill{ position:relative; box-shadow:0 0 10px -1px var(--accent); }
+.bar-fill.done{ box-shadow:0 0 12px -1px var(--success); }
+.bar-fill[style*="width: 0%"]{ box-shadow:none; }
+.bar.hit{ animation:barHit .9s ease-out; }
+@keyframes barHit{ 0%{ box-shadow:0 0 0 0 var(--success); } 40%{ box-shadow:0 0 0 7px transparent, 0 0 22px 2px var(--success); } 100%{ box-shadow:none; } }
+.ringBox.done{ animation:ringGlow 1.4s ease-out; }
+.ringBox.done .ring{ filter:drop-shadow(0 0 7px var(--gold-bg)) drop-shadow(0 0 14px var(--gold-bg)); }
+@keyframes ringGlow{ 0%{ transform:scale(.94); } 40%{ transform:scale(1.07); } 100%{ transform:scale(1); } }
+
+/* ---------- Schalter und Chips ---------- */
+input.switch{ transition:background .25s, border-color .25s; }
+input.switch::after{ transition:transform .4s cubic-bezier(.3,1.6,.5,1), background .2s, width .2s; }
+input.switch:active::after{ width:25px; }
+input.switch:checked:active::after{ transform:translateX(12px); }
+.chip{ transition:transform .4s cubic-bezier(.3,1.6,.5,1), background-color .2s, border-color .2s, color .2s; }
+.chip:active{ transform:scale(.9); }
+.switchRow{ cursor:pointer; }
+
+/* ---------- Tab-Leiste: gleitende Anzeige ---------- */
+.tabbar{ box-shadow:0 -14px 30px -18px rgba(0,0,0,.55); }
+.tabbarInner{ position:relative; }
+.tabbarInner::after{
+  content:""; position:absolute; top:-4px; left:0; width:calc(100% / var(--n, 5)); height:3px; border-radius:0 0 4px 4px; pointer-events:none;
+  background:linear-gradient(90deg, transparent, var(--accent) 28%, var(--accent) 72%, transparent);
+  box-shadow:0 6px 16px 1px var(--accent);
+  transform:translateX(calc(var(--i, 0) * 100%));
+  transition:transform .5s cubic-bezier(.3,1.35,.5,1);
+}
+.tabbarInner::before{
+  content:""; position:absolute; top:-4px; left:0; width:calc(100% / var(--n, 5)); height:56px; pointer-events:none;
+  background:radial-gradient(ellipse 60% 100% at 50% 0, var(--accent-soft), transparent 75%);
+  transform:translateX(calc(var(--i, 0) * 100%));
+  transition:transform .5s cubic-bezier(.3,1.35,.5,1);
+}
+.tabbar button.active::before{ display:none; }
+.tabbar button svg{ transition:transform .45s cubic-bezier(.3,1.7,.5,1), stroke .2s; }
+.tabbar button.active svg{ transform:translateY(-2px) scale(1.12); stroke:var(--accent); }
+.tabbar button{ transition:color .2s, transform .4s cubic-bezier(.3,1.6,.5,1); }
+
+/* ---------- Ränge und Erfolge: leicht schwebend ---------- */
+.myRankHead .rbadge{ filter:drop-shadow(0 8px 12px rgba(0,0,0,.4)); animation:bob 6s ease-in-out infinite; }
+@keyframes bob{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-3px); } }
+.ach:not(.locked) .aSvg{ filter:drop-shadow(0 5px 10px var(--gold-bg)); }
+.ach{ cursor:pointer; transition:transform .4s cubic-bezier(.3,1.6,.5,1); }
+
+@media (prefers-reduced-motion: reduce){
+  html::before, .myRankHead .rbadge, button.attn::before, .saveBar button::before, .heroCta::before{ animation:none; }
+  .pane > .card, .pane > .hero, .pane > .tip{ animation:none; }
+  .tabbarInner::after, .tabbarInner::before{ transition:none; }
+  button, .listItem, .choice, .chip{ transition:none; }
+  .ripple, .floatTxt{ display:none; }
+}

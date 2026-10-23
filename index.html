@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
 <style>#splash{position:fixed;inset:0;background:#0e1110;z-index:300}</style>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="motion.css">
 </head>
 <body>
 <div class="splash" id="splash" aria-hidden="true">
@@ -433,6 +434,13 @@
       </div>
       <button class="secondary small" id="pushToggle" type="button">Aktivieren</button>
     </div>
+    <label class="pushBox switchRow">
+      <div class="pushText">
+        <div class="pushTitle">Vibration</div>
+        <p class="hint">Dein Handy vibriert kurz bei Tipps, Speichern und Erfolgen.</p>
+      </div>
+      <input type="checkbox" class="switch" id="hapticToggle">
+    </label>
     <button class="secondary helpOpen" id="helpOpen" type="button">So funktioniert's</button>
     <div class="center"><button class="link" id="profileClose" type="button">Schließen</button></div>
   </div>
@@ -464,6 +472,7 @@
   </div>
 </div>
 
+<script src="motion.js"></script>
 <script type="module" src="app.js"></script>
 </body>
 </html>
