@@ -142,7 +142,7 @@ async function deleteRefs(refs) {
 /* ---------- Animationen (Explosion und Konfetti) ---------- */
 
 const FX = { parts: [], raf: 0, ctx: null, dpr: 1 };
-const FX_COLORS = ["#ffcf5c", "#ffffff", "#6d96ff", "#ff7570", "#4dd98c", "#c58bff"];
+const FX_COLORS = ["#dcb96c", "#eeeae0", "#c9a45c", "#8dbb9f", "#d9806b", "#f4dc94"];
 const reduceMotion = () => !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
 function fxResize() {
@@ -228,7 +228,7 @@ function nextCelebration() {
   celebrating = true;
   if (c.type === "ach") {
     $("celKicker").textContent = "Neuer Erfolg!";
-    $("celBadge").replaceChildren(achImg(c.ach.id, 168));
+    $("celBadge").replaceChildren(achImg(c.ach.id, 150, false));
     $("celName").textContent = c.ach.name;
     $("celSub").textContent = c.ach.desc;
   } else {
@@ -245,7 +245,7 @@ function nextCelebration() {
     const b = $("celBadge").getBoundingClientRect();
     const x = b.left + b.width / 2, y = b.top + b.height / 2;
     const mult = 1 + Math.min(1.5, c.level / 8);
-    const gold = ["#ffcf5c", "#ffe9a8", "#ffffff", "#f2b807"];
+    const gold = ["#dcb96c", "#f4dc94", "#eeeae0", "#c9a45c"];
     explosion(x, y, Math.round(140 * mult), FX_COLORS);
     setTimeout(() => explosion(x, y, Math.round(110 * mult), gold), 320);
     setTimeout(() => explosion(rnd(60, window.innerWidth - 60), rnd(120, window.innerHeight / 2), 80, FX_COLORS), 640);
@@ -642,17 +642,13 @@ async function renderHome() {
     if (r.info && r.info.status.cls === "pending") open++;
     const a = el("a", "listItem");
     a.href = "#g/" + r.id;
-    const tier = mascotTier(r.info ? r.info.streak : 0);
-    const img = el("img", "gMascot t" + tier);
-    img.src = "mascot/" + tier + ".jpg";
-    img.alt = "";
-    img.width = 54;
-    img.height = 54;
+    const sk = r.info ? r.info.streak : 0;
+    const img = el("div", "gStreak" + (sk >= 3 ? " hot" : ""));
+    img.append(el("b", "", String(sk)), el("span", "", sk === 1 ? "Tag" : "Tage"));
     const mid = el("div", "gInfo");
     mid.append(el("span", "", r.data ? r.data.name : "Gruppe (offline)"));
     if (r.data) {
-      const streakTxt = r.info ? r.info.streak + (r.info.streak === 1 ? " Tag" : " Tage") + " Serie · " : "";
-      mid.append(el("small", "", streakTxt + r.data.situps + "/" + r.data.pushups + (r.data.adminUid === S.user.uid ? " · Admin" : "")));
+      mid.append(el("small", "", r.data.situps + " Sit-ups · " + r.data.pushups + " Liegestütze" + (r.data.adminUid === S.user.uid ? " · Admin" : "")));
     }
     a.append(img, mid);
     if (r.info) a.append(el("span", "pill " + r.info.status.cls, r.info.status.label));
@@ -822,16 +818,94 @@ function rankChip(r) {
   return el("span", "rk" + (r.level >= HIGH_LEVEL ? " hi" : ""), "Lv " + r.level + " · " + r.name);
 }
 
-function rankImg(level, size) {
-  const img = el("img", "rimg");
-  img.src = "ranks/" + level + ".jpg";
-  img.alt = "Rang " + level;
-  img.width = size;
-  img.height = size;
-  img.style.setProperty("--s", size + "px");
-  return img;
+const SVG_NS = "http://www.w3.org/2000/svg";
+let svgUid = 0;
+
+const TIER_COLORS = {
+  iron: { rim: ["#8b908c", "#3f4542"], face: ["#505652", "#2a2f2c"], ink: "#d9dcd8" },
+  bronze: { rim: ["#d09560", "#6d4326"], face: ["#98663d", "#4e301c"], ink: "#f6e2cb" },
+  silver: { rim: ["#eceff1", "#7a8288"], face: ["#b0b8be", "#5a636a"], ink: "#fbfcfc" },
+  gold: { rim: ["#f4dc94", "#8a661f"], face: ["#cb9d3c", "#6b4c12"], ink: "#fff6d8" },
+  obsidian: { rim: ["#ecca79", "#7b5a1b"], face: ["#2d3033", "#0a0b0c"], ink: "#ecca79" },
+};
+
+const RANK_DESIGN = [
+  { tier: "iron", chev: 0, stars: 0 },
+  { tier: "bronze", chev: 1, stars: 0 },
+  { tier: "bronze", chev: 2, stars: 0 },
+  { tier: "bronze", chev: 3, stars: 0 },
+  { tier: "silver", chev: 1, stars: 1 },
+  { tier: "silver", chev: 2, stars: 1 },
+  { tier: "silver", chev: 3, stars: 1, laurel: true },
+  { tier: "gold", chev: 2, stars: 2, laurel: true },
+  { tier: "gold", chev: 3, stars: 2, laurel: true },
+  { tier: "gold", chev: 3, stars: 3, laurel: true },
+  { tier: "obsidian", chev: 3, stars: 3, laurel: true },
+  { tier: "obsidian", chev: 3, stars: 0, laurel: true, crown: true },
+];
+
+function starPath(cx, cy, r) {
+  const pts = [];
+  for (let k = 0; k < 10; k++) {
+    const a = (-90 + k * 36) * Math.PI / 180, rr = k % 2 ? r * 0.42 : r;
+    pts.push((cx + rr * Math.cos(a)).toFixed(1) + "," + (cy + rr * Math.sin(a)).toFixed(1));
+  }
+  return pts.join(" ");
 }
 
+function badgeMarkup(level) {
+  const d = RANK_DESIGN[Math.min(RANK_DESIGN.length, Math.max(1, level)) - 1], c = TIER_COLORS[d.tier], id = "rb" + (++svgUid);
+  let s = '<defs><linearGradient id="' + id + 'r" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + c.rim[0] + '"/><stop offset="1" stop-color="' + c.rim[1] + '"/></linearGradient>' +
+    '<linearGradient id="' + id + 'f" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + c.face[0] + '"/><stop offset="1" stop-color="' + c.face[1] + '"/></linearGradient></defs>';
+  s += '<circle cx="50" cy="50" r="48.5" fill="url(#' + id + 'r)"/>';
+  s += '<circle cx="50" cy="50" r="46" fill="none" stroke="' + c.rim[1] + '" stroke-width="1.6" stroke-dasharray="1.1 1.7" opacity=".55"/>';
+  s += '<circle cx="50" cy="50" r="42" fill="url(#' + id + 'f)" stroke="' + c.rim[1] + '" stroke-width="1"/>';
+  s += '<path d="M19 40 A33 33 0 0 1 58 17" fill="none" stroke="#fff" stroke-opacity=".16" stroke-width="2.4" stroke-linecap="round"/>';
+  s += '<circle cx="50" cy="50" r="37" fill="none" stroke="' + c.ink + '" stroke-opacity=".28" stroke-width=".8"/>';
+
+  const top = d.stars || d.crown;
+  if (d.chev === 0) {
+    s += '<path d="M50 41 L59 51 L50 61 L41 51 Z" fill="none" stroke="' + c.ink + '" stroke-width="3" stroke-linejoin="round"/>';
+  } else {
+    const cy = top ? 59 : 52, h = (d.chev - 1) * 10 + 7, y0 = cy - h / 2;
+    for (let i = 0; i < d.chev; i++) {
+      const y = y0 + i * 10;
+      s += '<path d="M33 ' + (y + 7) + ' L50 ' + y + ' L67 ' + (y + 7) + '" fill="none" stroke="' + c.ink + '" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/>';
+    }
+  }
+  for (let i = 0; i < d.stars; i++) {
+    const x = 50 + (i - (d.stars - 1) / 2) * 13;
+    const y = d.stars === 3 && i === 1 ? 24 : 28;
+    s += '<polygon points="' + starPath(x, y, 5.6) + '" fill="' + c.ink + '"/>';
+  }
+  if (d.crown) s += '<path d="M37 33 L35 20 L43 26 L50 16 L57 26 L65 20 L63 33 Z" fill="' + c.ink + '" stroke="' + c.ink + '" stroke-width="1" stroke-linejoin="round"/>';
+  if (d.laurel) {
+    for (let i = 0; i < 7; i++) {
+      const th = 108 + i * 13;
+      for (const side of [1, -1]) {
+        const ang = side === 1 ? th : 180 - th;
+        const px = 50 + 33 * Math.cos(ang * Math.PI / 180), py = 53 + 33 * Math.sin(ang * Math.PI / 180);
+        const rot = ang + (side === 1 ? 90 + 28 : 90 - 28);
+        s += '<ellipse cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" rx="4.4" ry="1.9" transform="rotate(' + rot.toFixed(0) + ' ' + px.toFixed(1) + ' ' + py.toFixed(1) + ')" fill="' + c.ink + '" opacity=".88"/>';
+      }
+    }
+  }
+  if (d.crown) s += '<circle cx="50" cy="50" r="49.4" fill="none" stroke="' + c.ink + '" stroke-width=".8" opacity=".8"/>';
+  return s;
+}
+
+function rankImg(level, size) {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 100 100");
+  svg.setAttribute("class", "rbadge");
+  svg.setAttribute("width", size);
+  svg.setAttribute("height", size);
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Rang " + level);
+  svg.style.setProperty("--s", size + "px");
+  svg.innerHTML = badgeMarkup(level);
+  return svg;
+}
 function streakFrom(getEntry, grp, today) {
   let d = today, streak = 0;
   if (!getEntry(d)) d = addDays(d, -1);
@@ -928,7 +1002,6 @@ const MARKS = { success: "✓", danger: "✕", skip: "S", pending: "·" };
 const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const RING_OUTER = 2 * Math.PI * 88;
 const RING_INNER = 2 * Math.PI * 64;
-const mascotTier = (streak) => (streak >= 30 ? 4 : streak >= 7 ? 3 : streak >= 1 ? 2 : 1);
 
 const HERO_LINES = {
   done: ["Tagesziel geknackt. Genieß den Moment.", "Heute gehört dir. Stark!", "Die Flamme brennt heller denn je.", "Fertig! Dein Bizeps nickt zufrieden."],
@@ -978,12 +1051,12 @@ function renderHero() {
   $("legP").textContent = p + "/" + grp.pushups;
 
   const streak = currentStreak(G, me, today);
-  const tier = mascotTier(streak);
-  $("mascotBox").className = "mascotBox t" + tier;
-  const want = "mascot/" + tier + ".jpg";
-  if (!$("mascotImg").src.endsWith(want)) $("mascotImg").src = want;
   $("streakNum").textContent = String(streak);
-  $("streakLabel").textContent = streak === 1 ? "Tag Serie" : "Tage Serie";
+  $("streakLabel").textContent = streak === 1 ? "Tag in Folge" : "Tage in Folge";
+  const photos = ["pushups", "situps", "hands"];
+  const dayNo = Math.floor(new Date(sel + "T00:00:00").getTime() / 86400000);
+  $("heroPhoto").style.backgroundImage = "url(img/" + photos[((dayNo % photos.length) + photos.length) % photos.length] + ".jpg)";
+  try { $("heroDay").textContent = new Intl.DateTimeFormat("de-DE", { weekday: "long", day: "numeric", month: "long" }).format(new Date(sel + "T00:00:00")); } catch (e) { $("heroDay").textContent = sel; }
 
   const saved = entryFor(G, me, sel);
   const savedDone = !!(saved && !saved.skipped && saved.situps >= grp.situps && saved.pushups >= grp.pushups);
@@ -1030,16 +1103,33 @@ const ACH = [
   { id: 11, name: "Eisenfresser", desc: "5.000 Wiederholungen insgesamt.", prog: (m) => [m.totalReps, 5000] },
 ];
 
-function achImg(id, size) {
-  const img = el("img", "rimg");
-  img.src = "ach/" + id + ".jpg";
-  img.alt = "";
-  img.width = size;
-  img.height = size;
-  img.style.setProperty("--s", size + "px");
-  return img;
-}
+const ACH_ICONS = {
+  1: '<path d="M12 20.5V11"/><path d="M12 14C8 14 6 12 6 8c4 0 6 2 6 6z"/><path d="M12 11c0-3.5 2.5-6 6-6 0 3.5-2.5 6-6 6z"/><path d="M8 20.5h8"/>',
+  2: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/>',
+  3: '<path d="M12 3c.5 3-1.2 4.6-2.8 6.4C7.6 11.2 6.5 12.8 6.5 15a5.5 5.5 0 0 0 11 0c0-1.9-.9-3.3-1.9-4.5-.3 1.2-.9 2-1.8 2.5.6-3.8-.3-7.2-1.8-10z"/>',
+  4: '<path d="M12 2.5c.5 2.7-1.1 4.2-2.5 5.8C8 10 7 11.4 7 13.4a5 5 0 0 0 10 0c0-1.7-.8-3-1.7-4.1-.3 1.1-.8 1.8-1.6 2.3.5-3.4-.3-6.5-1.7-9.1z"/><path d="M5 20.5h14"/>',
+  5: '<path d="M13 2.5L5.5 13.5H11L10 21.5l8.5-11.5H13z"/>',
+  6: '<path d="M4 18L2.8 8.5l5.2 4 4-7 4 7 5.2-4L20 18z"/><path d="M5 21h14"/>',
+  7: '<path d="M6 12.5l6-6 6 6"/><path d="M6 19l6-6 6 6"/>',
+  8: '<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17"/><path d="M8 3v4M16 3v4"/><path d="M8.5 15l2.5 2.5 4.5-4.5"/>',
+  9: '<path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5"/><path d="M4.5 4v4.5H9"/>',
+  10: '<path d="M12 3l7 9-7 9-7-9z"/><circle cx="12" cy="12" r="2"/>',
+  11: '<path d="M6.5 8v8M3.5 10v4M17.5 8v8M20.5 10v4M6.5 12h11"/>',
+};
 
+function achImg(id, size, locked) {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 100 100");
+  svg.setAttribute("class", "aSvg");
+  svg.setAttribute("width", size);
+  svg.setAttribute("height", size);
+  svg.setAttribute("aria-hidden", "true");
+  svg.innerHTML =
+    '<circle class="aplate" cx="50" cy="50" r="47"/>' +
+    '<circle cx="50" cy="50" r="44" fill="none" stroke="currentColor" stroke-width="1.4"' + (locked ? ' stroke-dasharray="2 3.2"' : "") + "/>" +
+    '<g transform="translate(25 25) scale(2.08)" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' + (ACH_ICONS[id] || "") + "</g>";
+  return svg;
+}
 function achStats(G, uid) {
   const grp = G.group;
   const mine = G.entries.filter((e) => e.uid === uid).sort((a, b) => a.date.localeCompare(b.date));
@@ -1077,7 +1167,7 @@ function renderAchievements(G, me, member) {
   $("achCount").textContent = state.filter((x) => x.ok).length + " / " + ACH.length;
   $("achGrid").replaceChildren(...state.map(({ a, v, t, ok }) => {
     const tile = el("div", "ach" + (ok ? "" : " locked"));
-    tile.append(achImg(a.id, 72), el("div", "achName", a.name));
+    tile.append(achImg(a.id, 68, !ok), el("div", "achName", a.name));
     if (ok || t === 1) {
       tile.append(el("div", "achDesc", a.desc));
     } else {

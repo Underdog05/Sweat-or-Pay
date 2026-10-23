@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sweat or Pay</title>
-<meta name="theme-color" content="#0a1120">
+<meta name="theme-color" content="#0e1110">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Sweat or Pay">
@@ -13,7 +13,7 @@
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -29,8 +29,11 @@
   <!-- ===== Anmeldung ===== -->
   <section id="viewAuth" hidden>
     <div class="gate">
-      <div class="kicker">Gemeinsam fit bleiben, sonst zahlen</div>
-      <h1>Sweat <em>or</em> Pay</h1>
+      <div class="gatePhoto"></div>
+      <div class="gateText">
+        <div class="kicker">Jeden Tag. Gemeinsam. Sonst zahlst du.</div>
+        <h1>Sweat <em>or</em> Pay</h1>
+      </div>
     </div>
     <div class="card">
       <div class="tabs" role="tablist">
@@ -59,9 +62,11 @@
 
   <!-- ===== Meine Gruppen ===== -->
   <section id="viewHome" hidden>
-    <div class="homeHello">
-      <div class="helloKicker" id="helloKicker">Willkommen zurück</div>
-      <h2 class="pageTitle" id="helloTitle">Meine Gruppen</h2>
+    <div class="homeHead">
+      <div class="homeHeadText">
+        <div class="helloKicker" id="helloKicker">Willkommen zurück</div>
+        <h2 class="pageTitle" id="helloTitle">Meine Gruppen</h2>
+      </div>
     </div>
     <div class="list" id="groupList"></div>
     <p class="empty" id="groupEmpty" hidden>Du bist noch in keiner Gruppe. Tritt mit einem Code bei oder erstelle eine eigene Gruppe.</p>
@@ -104,45 +109,38 @@
     <!-- Tab: Heute -->
     <div class="pane" id="paneToday">
       <section class="hero" id="heroCard">
-        <div class="heroBg"></div>
-        <div class="heroInner">
-          <div class="heroRow">
-            <div class="mascotBox" id="mascotBox"><img id="mascotImg" src="mascot/1.jpg" alt="" width="88" height="88"></div>
-            <div class="heroText">
-              <div class="streakLine">
-                <svg class="flameIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c.6 3.2-1.2 4.9-2.9 6.8C7.5 10.6 6 12.4 6 15a6 6 0 0 0 12 0c0-2.1-1-3.6-2.1-4.9-.3 1.3-1 2.2-2 2.7.7-4.2-.3-8-1.9-10.8z"/></svg>
-                <b class="num" id="streakNum">0</b><span id="streakLabel">Tage Serie</span>
-              </div>
-              <div class="heroLine" id="heroLine"></div>
-              <div class="heroSub" id="heroSub"></div>
+        <div class="heroPhoto" id="heroPhoto">
+          <div class="heroDay" id="heroDay"></div>
+          <div class="heroStreak">
+            <div class="streakNum" id="streakNum">0</div>
+            <div class="streakMeta">
+              <svg class="flameIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c.5 3-1.2 4.6-2.8 6.4C7.6 11.2 6.5 12.8 6.5 15a5.5 5.5 0 0 0 11 0c0-1.9-.9-3.3-1.9-4.5-.3 1.2-.9 2-1.8 2.5.6-3.8-.3-7.2-1.8-10z"/></svg>
+              <span id="streakLabel">Tage in Folge</span>
             </div>
           </div>
-
+        </div>
+        <div class="heroBody">
           <div class="ringBox">
             <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
-              <defs>
-                <linearGradient id="gA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#3b82f6"/></linearGradient>
-                <linearGradient id="gB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb020"/><stop offset="1" stop-color="#ff4f8b"/></linearGradient>
-                <linearGradient id="gG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe27a"/><stop offset="1" stop-color="#f2a900"/></linearGradient>
-              </defs>
               <circle class="ringTrack" cx="100" cy="100" r="88"/>
-              <circle class="ringArc" id="ringOuter" cx="100" cy="100" r="88" stroke="url(#gA)"/>
+              <circle class="ringArc a" id="ringOuter" cx="100" cy="100" r="88"/>
               <circle class="ringTrack" cx="100" cy="100" r="64"/>
-              <circle class="ringArc" id="ringInner" cx="100" cy="100" r="64" stroke="url(#gB)"/>
+              <circle class="ringArc b" id="ringInner" cx="100" cy="100" r="64"/>
             </svg>
             <div class="ringCenter">
-              <div class="ringPct num" id="ringPct">0%</div>
+              <div class="ringPct" id="ringPct">0%</div>
               <div class="ringLbl" id="ringLbl">Tagesziel</div>
             </div>
           </div>
-          <div class="ringLegend">
-            <span><i class="dotA"></i>Sit-ups <b class="num" id="legS">0/100</b></span>
-            <span><i class="dotB"></i>Liegestütze <b class="num" id="legP">0/50</b></span>
+          <div class="heroStats">
+            <div class="statLine"><span><i class="dotA"></i>Sit-ups</span><b id="legS">0/100</b></div>
+            <div class="statLine"><span><i class="dotB"></i>Liegestütze</span><b id="legP">0/50</b></div>
+            <div class="heroLine" id="heroLine"></div>
+            <div class="heroSub" id="heroSub"></div>
           </div>
-          <div class="weekStrip" id="weekStrip"></div>
         </div>
+        <div class="weekStrip" id="weekStrip"></div>
       </section>
-
       <section class="card" id="entryCard">
         <div class="entryHead">
           <input type="date" id="dateInput" aria-label="Datum">
