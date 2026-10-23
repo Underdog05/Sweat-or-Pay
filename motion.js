@@ -119,7 +119,7 @@
   });
 
   /* ---------- Tab-Leiste: Anzeige gleitet zum aktiven Reiter ---------- */
-  var TAB_COLORS = ["var(--tab1)", "var(--tab2)", "var(--tab3)", "var(--tab4)", "var(--tab5)"];
+  var TAB_COLORS = ["var(--tab1)", "var(--tab2)", "var(--tab3)", "var(--tab4)", "var(--tab5)", "var(--tab6)"];
   function syncTabbar() {
     var inner = document.querySelector(".tabbarInner");
     if (!inner) return;

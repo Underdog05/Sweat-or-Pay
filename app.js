@@ -995,33 +995,34 @@ function renderBoard() {
   $("boardHint").textContent = cfg.hint;
 }
 
+function rankBlock(label, total) {
+  const r = rankFor(total);
+  const box = el("div", "myRank");
+  const head = el("div", "myRankHead");
+  const info = el("div", "myRankInfo");
+  const top = el("div", "myRankTop");
+  top.append(el("span", "exName", label), rankChip(r));
+  info.append(
+    top,
+    el("div", "myRankTotal num", nf(total)),
+    el("div", "myRankNext", r.next ? "noch " + nf(r.next.need - total) + " bis " + r.next.name : "Höchster Rang erreicht")
+  );
+  head.append(rankImg(r.level, 72), info);
+  const bar = el("div", "bar");
+  const fill = el("div", "bar-fill rankfill" + (r.level >= HIGH_LEVEL ? " hi" : ""));
+  fill.style.width = (r.next ? Math.min(100, ((total - r.base) / (r.next.need - r.base)) * 100) : 100) + "%";
+  bar.append(fill);
+  box.append(head, bar);
+  return box;
+}
+
 function renderRanks(isMember) {
   const G = S.g;
   const me = S.user.uid;
   $("myRankCard").hidden = !isMember;
   if (isMember) {
     const mine = G.stats[me] || { sit: 0, push: 0 };
-    const blocks = [["Sit-ups", mine.sit], ["Liegestütze", mine.push]].map(([label, total]) => {
-      const r = rankFor(total);
-      const box = el("div", "myRank");
-      const head = el("div", "myRankHead");
-      const info = el("div", "myRankInfo");
-      const top = el("div", "myRankTop");
-      top.append(el("span", "exName", label), rankChip(r));
-      info.append(
-        top,
-        el("div", "myRankTotal num", nf(total)),
-        el("div", "myRankNext", r.next ? "noch " + nf(r.next.need - total) + " bis " + r.next.name : "Höchster Rang erreicht")
-      );
-      head.append(rankImg(r.level, 72), info);
-      const bar = el("div", "bar");
-      const fill = el("div", "bar-fill rankfill" + (r.level >= HIGH_LEVEL ? " hi" : ""));
-      fill.style.width = (r.next ? Math.min(100, ((total - r.base) / (r.next.need - r.base)) * 100) : 100) + "%";
-      bar.append(fill);
-      box.append(head, bar);
-      return box;
-    });
-    $("myRanks").replaceChildren(...blocks);
+    $("myRanks").replaceChildren(rankBlock("Sit-ups", mine.sit), rankBlock("Liegestütze", mine.push));
   }
   $("ladder").replaceChildren(...RANKS.map((r, i) => {
     const row = el("div", "lrow");
@@ -1447,7 +1448,7 @@ function startGroup(id) {
   const G = {
     id, group: null, members: [], entries: [], index: new Map(), messages: [], reactions: [],
     selectedDate: todayStr(), formInit: false, stopped: false, unsubs: [], tab: "today", sec: "bilanz",
-    openPicker: null, chatScrolled: false,
+    openPicker: null, chatScrolled: false, teamDate: todayStr(), teamUid: null,
     loaded: { g: false, m: false, e: false },
   };
   S.g = G;
@@ -1541,6 +1542,7 @@ function updateBars() {
 }
 
 const TIPS = {
+  team: "Hier siehst du, wie es den anderen heute geht. Tippe auf eine Person für Statistik und vergangene Tage.",
   feed: "Hier siehst du, was die anderen geschafft haben. Tippe auf „Reagieren“ und schick ihnen einen Spruch.",
   rang: "Jede Wiederholung zählt für deinen Rang. Sammle Erfolge und steige bis Mythos auf.",
   chat: "Schreib der Gruppe. Ein roter Punkt am Reiter zeigt dir neue Nachrichten.",
@@ -1592,7 +1594,7 @@ function renderStartCard(G, me, member) {
     return b;
   }));
 }
-const PANES = { today: "paneToday", feed: "paneFeed", rang: "paneRang", chat: "paneChat", gruppe: "paneGruppe" };
+const PANES = { today: "paneToday", team: "paneTeam", feed: "paneFeed", rang: "paneRang", chat: "paneChat", gruppe: "paneGruppe" };
 function setTab(tab) {
   if (S.g) S.g.tab = tab;
   Object.keys(PANES).forEach((t) => { $(PANES[t]).hidden = t !== tab; });
@@ -1636,6 +1638,170 @@ function updateSkip() {
   }
 }
 
+/* ---------- Team: Tagesübersicht und Personenansicht ---------- */
+
+const HISTORY_DAYS = 30;
+
+function renderTeam(members, member) {
+  const G = S.g, me = S.user.uid, grp = G.group, today = todayStr();
+  if (!G.teamDate || G.teamDate > today) G.teamDate = today;
+  const date = G.teamDate;
+
+  const stats = members.map((m) => statusFor(G, m.uid, date));
+  const count = (cls) => stats.filter((s) => s.cls === cls).length;
+  const parts = [[count("success"), "geschafft"], [count("skip"), "Skip"], [count("danger"), "verloren"], [count("pending"), "offen"]]
+    .filter(([n]) => n > 0).map(([n, t]) => n + " " + t);
+  $("teamDayTitle").textContent = dayLabel(date) + (date === today || date === addDays(today, -1) ? " · " + formatDate(date) : "");
+  $("teamSummary").textContent = parts.join(" · ") || "Noch niemand in der Gruppe";
+  $("teamPrev").disabled = date <= addDays(today, -HISTORY_DAYS);
+  $("teamNext").disabled = date >= today;
+
+  $("todayList").replaceChildren(...members.map((m) => {
+    const s = statusFor(G, m.uid, date), e = entryFor(G, m.uid, date);
+    const row = el("div", "person tap");
+    row.setAttribute("role", "button");
+    row.tabIndex = 0;
+    const main = el("div", "personMain");
+    main.append(
+      el("div", "personName", m.name + (m.uid === me ? " (du)" : "")),
+      el("div", "personSub", e ? (e.skipped ? "Skip-Tag genutzt" : e.situps + " Sit-ups · " + e.pushups + " Liegestütze") : (date === today ? "Noch nichts eingetragen" : "Nichts eingetragen"))
+    );
+    if (e && !e.skipped) {
+      const bars = el("div", "miniBars");
+      [["sit", e.situps / grp.situps], ["push", e.pushups / grp.pushups]].forEach(([k, v]) => {
+        const b = el("i", k);
+        const f = el("b");
+        f.style.width = Math.min(100, Math.round(v * 100)) + "%";
+        if (v >= 1) f.className = "full";
+        b.append(f);
+        bars.append(b);
+      });
+      main.append(bars);
+    }
+    row.append(avatarEl(m, 44, m.uid === me), main);
+    if (PUSH && member && m.uid !== me && s.cls === "pending" && date === today) {
+      const done = nudgedRecently(G.id, m.uid);
+      const b = el("button", "nudge", done ? "Angestupst" : "Anstupsen");
+      b.type = "button";
+      b.disabled = done;
+      b.addEventListener("click", (ev) => { ev.stopPropagation(); nudgeMember(m, b); });
+      row.append(b);
+    } else {
+      row.append(el("span", "pill " + s.cls, s.label));
+    }
+    row.append(el("span", "chev", "›"));
+    const open = () => openPlayer(m.uid);
+    row.addEventListener("click", open);
+    row.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open(); } });
+    return row;
+  }));
+
+  const target = G.teamUid && members.find((m) => m.uid === G.teamUid);
+  if (G.teamUid && !target) G.teamUid = null;
+  $("teamOverview").hidden = !!target;
+  $("teamDetail").hidden = !target;
+  if (target) renderPlayer(target);
+}
+
+function openPlayer(uid) {
+  const G = S.g;
+  if (!G) return;
+  G.teamUid = uid;
+  renderTeam(G.membersView, isMemberOf(G));
+  window.scrollTo(0, 0);
+}
+
+function closePlayer() {
+  const G = S.g;
+  if (!G || !G.teamUid) return;
+  G.teamUid = null;
+  renderTeam(G.membersView, isMemberOf(G));
+  window.scrollTo(0, 0);
+}
+
+function renderPlayer(m) {
+  const G = S.g, grp = G.group, me = S.user.uid, today = todayStr();
+  const st = G.stats[m.uid] || { sit: 0, push: 0, done: 0, streak: 0 };
+  const mine = G.entries.filter((e) => e.uid === m.uid);
+  const lost = mine.filter((e) => !e.skipped && (e.situps < grp.situps || e.pushups < grp.pushups)).length;
+  const skips = mine.filter((e) => e.skipped).length;
+  const am = achStats(G, m.uid);
+  const nodes = [];
+
+  const head = el("section", "card playerHead");
+  const info = el("div", "playerInfo");
+  const s = statusFor(G, m.uid, today);
+  info.append(el("div", "playerName", m.name + (m.uid === me ? " (du)" : "")), el("span", "pill " + s.cls, "Heute: " + s.label));
+  head.append(avatarEl(m, 72, m.uid === me), info);
+  nodes.push(head);
+
+  const tiles = el("section", "card");
+  tiles.append(el("h2", "cardTitle", "Statistik"));
+  const grid = el("div", "statGrid");
+  [
+    [st.streak, "Serie", st.streak > 0 ? "hot" : ""],
+    [am.best, "Beste Serie", ""],
+    [st.done, "Geschafft", "ok"],
+    [lost, "Verloren", lost > 0 ? "bad" : ""],
+    [lost * grp.penalty + " €", "Schulden", lost > 0 ? "bad" : "ok"],
+    [skips, "Skip-Tage", ""],
+  ].forEach(([v, label, cls]) => {
+    const t = el("div", "statTile" + (cls ? " " + cls : ""));
+    t.append(el("b", "num", String(v)), el("span", "", label));
+    grid.append(t);
+  });
+  tiles.append(grid);
+  nodes.push(tiles);
+
+  const ranks = el("section", "card");
+  ranks.append(el("h2", "cardTitle", "Rang"), rankBlock("Sit-ups", st.sit), rankBlock("Liegestütze", st.push));
+  nodes.push(ranks);
+
+  const unlocked = ACH.filter((a) => { const [v, t] = a.prog(am); return v >= t; });
+  const ach = el("section", "card");
+  const achHead = el("div", "cardTitleRow");
+  achHead.append(el("h2", "cardTitle", "Erfolge"), el("span", "achCount num", unlocked.length + " / " + ACH.length));
+  ach.append(achHead);
+  if (unlocked.length) {
+    const row = el("div", "achRow");
+    unlocked.forEach((a) => { const w = el("div", "achMini"); w.title = a.name; w.append(achImg(a.id, 46, false)); row.append(w); });
+    ach.append(row);
+  } else {
+    ach.append(el("p", "empty", "Noch keine Erfolge freigeschaltet."));
+  }
+  nodes.push(ach);
+
+  const hist = el("section", "card");
+  hist.append(el("h2", "cardTitle", "Vergangene Tage"));
+  const firstDate = mine.reduce((min, e) => (e.date < min ? e.date : min), today);
+  const list = el("div", "dayList");
+  for (let i = 0; i < HISTORY_DAYS; i++) {
+    const d = addDays(today, -i);
+    if (d < firstDate) break;
+    const ds = statusFor(G, m.uid, d), e = entryFor(G, m.uid, d);
+    const row = el("div", "dayRow");
+    const date = el("div", "dayDate");
+    date.append(el("b", "", dayLabel(d)), el("span", "", i < 2 ? formatDate(d) : ""));
+    const vals = el("div", "dayVals");
+    if (e && !e.skipped) {
+      vals.append(
+        el("span", "vS" + (e.situps >= grp.situps ? " ok" : ""), nf(e.situps) + " Sit-ups"),
+        el("span", "vP" + (e.pushups >= grp.pushups ? " ok" : ""), nf(e.pushups) + " Liegestütze")
+      );
+    } else {
+      vals.append(el("span", "vNone", e ? "Skip-Tag genutzt" : "Nichts eingetragen"));
+    }
+    row.append(date, vals, el("span", "pill " + ds.cls, ds.label));
+    list.append(row);
+  }
+  if (!list.childNodes.length) list.append(el("p", "empty", m.name + " hat noch nichts eingetragen."));
+  hist.append(list);
+  if (list.childNodes.length >= HISTORY_DAYS || firstDate < addDays(today, -HISTORY_DAYS + 1)) hist.append(el("p", "hint", "Gezeigt werden die letzten " + HISTORY_DAYS + " Tage."));
+  nodes.push(hist);
+
+  $("playerView").replaceChildren(...nodes);
+}
+
 function renderGroup() {
   const G = S.g;
   if (!G || !G.loaded.g || !G.loaded.m || !G.loaded.e) return;
@@ -1659,28 +1825,6 @@ function renderGroup() {
   if (member) { updateSkip(); updateBars(); }
 
   const today = todayStr();
-
-  $("todayList").replaceChildren(...members.map((m) => {
-    const s = statusFor(G, m.uid, today), e = entryFor(G, m.uid, today);
-    const row = el("div", "person");
-    const main = el("div", "personMain");
-    main.append(
-      el("div", "personName", m.name + (m.uid === me ? " (du)" : "")),
-      el("div", "personSub", e ? (e.skipped ? "Skip-Tag genutzt" : e.situps + " Sit-ups · " + e.pushups + " Liegestütze") : "Noch nichts eingetragen")
-    );
-    row.append(avatarEl(m, 40, m.uid === me), main);
-    if (PUSH && member && m.uid !== me && s.cls === "pending" && today === todayStr()) {
-      const done = nudgedRecently(G.id, m.uid);
-      const b = el("button", "nudge", done ? "Angestupst" : "Anstupsen");
-      b.type = "button";
-      b.disabled = done;
-      b.addEventListener("click", () => nudgeMember(m, b));
-      row.append(b);
-    } else {
-      row.append(el("span", "pill " + s.cls, s.label));
-    }
-    return row;
-  }));
 
   const lost = {}, sit = {}, push = {};
   members.forEach((m) => { lost[m.uid] = 0; sit[m.uid] = 0; push[m.uid] = 0; });
@@ -1722,6 +1866,7 @@ function renderGroup() {
   });
   G.stats = stats;
   G.membersView = members;
+  renderTeam(members, member);
   renderRanks(member);
   renderAchievements(G, me, member);
   renderHero();
@@ -1988,7 +2133,13 @@ function wire() {
   $("helpAuth").addEventListener("click", openHelp);
   $("helpClose").addEventListener("click", closeHelp);
   $("helpModal").addEventListener("click", (e) => { if (e.target === $("helpModal")) closeHelp(); });
-  document.querySelectorAll(".tabbar button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+  document.querySelectorAll(".tabbar button").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.tab === "team" && S.g && S.g.tab === "team" && S.g.teamUid) { closePlayer(); return; }
+    setTab(b.dataset.tab);
+  }));
+  $("teamBack").addEventListener("click", closePlayer);
+  $("teamPrev").addEventListener("click", () => { const G = S.g; if (!G) return; G.teamDate = addDays(G.teamDate, -1); renderTeam(G.membersView, isMemberOf(G)); });
+  $("teamNext").addEventListener("click", () => { const G = S.g; if (!G) return; G.teamDate = addDays(G.teamDate, 1); renderTeam(G.membersView, isMemberOf(G)); });
   document.querySelectorAll("#groupSeg button").forEach((b) => b.addEventListener("click", () => setSec(b.dataset.sec)));
   document.querySelectorAll("#metricSeg button").forEach((b) => b.addEventListener("click", () => {
     if (!S.g) return;

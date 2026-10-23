@@ -261,3 +261,52 @@ button.primary.isBusy, .saveBar button.isBusy{ --spin:var(--cta-text); }
 .tabbar button.active svg{ stroke:var(--tc); filter:none; }
 .tabbar button.active{ color:var(--text); }
 .tabbar{ box-shadow:0 -10px 24px -18px rgba(0,0,0,.45); }
+
+/* ---------- Team-Reiter ---------- */
+:root{ --tab1:#b8663f; --tab2:#2f8f85; --tab3:#4a7fa8; --tab4:#9a7424; --tab5:#6f63b8; --tab6:#3f8a5e; }
+@media (prefers-color-scheme: dark){
+  :root{ --tab1:#c98562; --tab2:#6fb3aa; --tab3:#86a9c9; --tab4:#c4a468; --tab5:#9a92cc; --tab6:#82b596; }
+}
+.tabbar{ padding-left:6px; padding-right:6px; }
+.tabbar button{ letter-spacing:.07em; font-size:11.5px; }
+
+.dayNav{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+.dayBtn{ width:42px; height:42px; flex:none; border-radius:12px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font:600 26px/1 "Barlow Condensed",sans-serif; padding:0 0 3px; cursor:pointer; }
+.dayBtn:disabled{ opacity:.3; }
+.dayMid{ flex:1; min-width:0; text-align:center; }
+.dayTitle{ font:700 24px/1.1 "Barlow Condensed",sans-serif; letter-spacing:.06em; text-transform:uppercase; }
+.daySub{ font-size:13px; color:var(--text-dim); margin-top:3px; }
+.person.tap{ cursor:pointer; margin:0 -8px; padding:12px 8px; border-radius:12px; border-top-color:transparent; transition:background .2s, transform .35s cubic-bezier(.3,1.5,.5,1); position:relative; }
+.person.tap + .person.tap{ border-top:1px solid var(--border); }
+.person.tap:active{ background:var(--accent-soft); transform:scale(.985); }
+.person .chev{ flex:none; color:var(--text-dim); font-size:22px; line-height:1; margin-left:-2px; }
+.miniBars{ display:flex; gap:5px; margin-top:7px; }
+.miniBars i{ flex:1; height:4px; border-radius:2px; background:var(--border); overflow:hidden; }
+.miniBars i b{ display:block; height:100%; border-radius:2px; }
+.miniBars i.sit b{ background:var(--c-sit); }
+.miniBars i.push b{ background:var(--c-push); }
+.miniBars i b.full{ background:var(--success); }
+
+.startBack + #playerView{ margin-top:2px; }
+.playerHead{ display:flex; align-items:center; gap:16px; }
+.playerName{ font:700 28px/1.05 "Barlow Condensed",sans-serif; letter-spacing:.04em; text-transform:uppercase; margin-bottom:8px; overflow-wrap:anywhere; }
+.statGrid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.statTile{ padding:12px 6px 10px; text-align:center; border:1px solid var(--border); border-radius:12px; background:var(--surface-2); }
+.statTile b{ display:block; font:700 30px/1 "Barlow Condensed",sans-serif; }
+.statTile span{ display:block; margin-top:5px; font:600 11px "Barlow Condensed",sans-serif; letter-spacing:.14em; text-transform:uppercase; color:var(--text-dim); }
+.statTile.hot b{ color:var(--c-hot); text-shadow:0 0 14px rgba(255,154,60,.4); }
+.statTile.ok b{ color:var(--success); }
+.statTile.bad b{ color:var(--danger); }
+.achRow{ display:flex; flex-wrap:wrap; gap:10px; color:var(--gold); }
+.achMini .aSvg{ width:46px; height:46px; }
+.dayList{ display:flex; flex-direction:column; }
+.dayRow{ display:flex; align-items:center; gap:10px; padding:11px 0; border-top:1px solid var(--border); }
+.dayRow:first-child{ border-top:none; padding-top:0; }
+.dayDate{ width:78px; flex:none; }
+.dayDate b{ display:block; font:700 17px/1.1 "Barlow Condensed",sans-serif; letter-spacing:.06em; text-transform:uppercase; }
+.dayDate span{ display:block; font-size:12px; color:var(--text-dim); margin-top:2px; }
+.dayVals{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; font-size:14px; color:var(--text-dim); }
+.dayVals .vS.ok{ color:var(--c-sit); }
+.dayVals .vP.ok{ color:var(--c-push); }
+.dayVals .vNone{ font-style:italic; }
+.dayRow .pill{ flex:none; }
