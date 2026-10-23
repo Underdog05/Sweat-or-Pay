@@ -1,6 +1,6 @@
 /* Sweat or Pay: ruhiges, erwachsenes Design. Grünschwarz, Knochenweiß, Messing. */
 :root{
-  color-scheme: light dark;
+  color-scheme: light;
   --bg:#e8e4d9; --surface:#f3f0e8; --surface-2:#eae6db; --border:#d2ccbc;
   --text:#151917; --text-dim:#66675f;
   --accent:#8a6828; --accent-soft:rgba(138,104,40,.12); --accent-text:#fffaf0;
@@ -11,8 +11,8 @@
   --gold:#8a6828; --gold-bg:rgba(138,104,40,.14);
   --bar:rgba(232,228,217,.88); --glow:rgba(138,104,40,.0); --grain:.07;
 }
-@media (prefers-color-scheme: dark){
-  :root{
+:root[data-theme="dark"]{
+  color-scheme: dark;
     --bg:#0e1110; --surface:#151a18; --surface-2:#1c2220; --border:#2a322e;
     --text:#eeeae0; --text-dim:#98a099;
     --accent:#c9a45c; --accent-soft:rgba(201,164,92,.14); --accent-text:#19140a;
@@ -23,7 +23,6 @@
     --gold:#dcb96c; --gold-bg:rgba(220,185,108,.14);
     --bar:rgba(14,17,16,.86); --glow:rgba(201,164,92,.08); --grain:.10;
   }
-}
 
 *{box-sizing:border-box;}
 html,body{margin:0;}

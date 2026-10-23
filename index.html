@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sweat or Pay</title>
 <meta name="theme-color" content="#0e1110">
+<script>(function(){var d=true;try{var p=localStorage.getItem("sop_theme")||"auto";d=p==="dark"||(p==="auto"&&window.matchMedia("(prefers-color-scheme: dark)").matches);}catch(e){}document.documentElement.setAttribute("data-theme",d?"dark":"light");var m=document.querySelector("meta[name=theme-color]");if(m)m.setAttribute("content",d?"#0e1110":"#ece8dd");})();</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Sweat or Pay">
@@ -430,7 +431,7 @@
       <button class="charThumb" id="profileChar" type="button" aria-label="Charakter bearbeiten"></button>
       <div class="pushText">
         <div class="pushTitle">Dein Charakter</div>
-        <div class="hint">Er steht auf dem Podest der Rangliste, wenn du vorne liegst.</div>
+        <div class="hint">Erscheint auf dem Podest der Rangliste.</div>
       </div>
       <button class="secondary small" id="charOpen" type="button">Bearbeiten</button>
     </div>
@@ -441,6 +442,15 @@
         <div class="hint" id="pushHint"></div>
       </div>
       <button class="secondary small" id="pushToggle" type="button">Aktivieren</button>
+    </div>
+    <div class="themeBox">
+      <div class="pushTitle">Darstellung</div>
+      <div class="seg" id="themeSeg" role="radiogroup" aria-label="Darstellung">
+        <button type="button" data-theme-pref="auto" class="active">Automatisch</button>
+        <button type="button" data-theme-pref="light">Hell</button>
+        <button type="button" data-theme-pref="dark">Dunkel</button>
+      </div>
+      <p class="hint">„Automatisch“ folgt der Einstellung deines Handys.</p>
     </div>
     <label class="pushBox switchRow">
       <div class="pushText">
